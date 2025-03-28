@@ -31,6 +31,10 @@ Imagine exploring your code’s DNA in a visual graph, where every node and edge
 
 ---
 
+[![CodeGraph Demo](/image.png)](https://www.youtube.com/watch?v=MpFzfRAZ_Y0)
+
+---
+
 ## 🛠️ Installation
 
 Get started in minutes:
