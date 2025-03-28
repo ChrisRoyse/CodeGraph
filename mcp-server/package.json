@@ -1,0 +1,29 @@
+{
+  "name": "codebase-graph-server",
+  "version": "0.1.0",
+  "description": "MCP Server to query the codebase Neo4j graph",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc -w & node --watch dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "neo4j",
+    "codebase",
+    "graph"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.7.0",
+    "dotenv": "^16.4.5",
+    "neo4j-driver": "^5.22.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "typescript": "^5.5.3"
+  }
+}

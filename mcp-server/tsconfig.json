@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    /* Base Options: */
+    "esModuleInterop": true, // Keep true for better interop with CJS dependencies
+    "skipLibCheck": true,
+    "target": "ES2022", // Keep target high for modern syntax
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "moduleDetection": "force", // Keep this
+    "isolatedModules": true, // Keep this
+    "verbatimModuleSyntax": true, // Can likely re-enable with CommonJS
+
+    /* Strictness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitAny": true,
+
+    /* Module Resolution - Change to CommonJS compatible */
+    "moduleResolution": "Node", // Changed from NodeNext
+    "module": "CommonJS", // Changed from NodeNext
+    "baseUrl": "./src", // Allows imports relative to src/
+    "outDir": "./dist", // Output directory for compiled JS
+
+    /* Emit */
+    "declaration": true, // Generate .d.ts files
+    "sourceMap": true, // Generate source maps
+
+    /* Other */
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"], // Only compile files in src
+  "exclude": ["node_modules", "dist"] // Exclude node_modules and output dir
+}

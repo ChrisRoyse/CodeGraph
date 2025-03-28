@@ -1,0 +1,51 @@
+# Node.js / npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json # Optional: Some teams commit this, others don't. Assuming ignore for now.
+yarn.lock # If using Yarn
+
+# TypeScript compilation output
+dist/
+*.tsbuildinfo
+
+# MCP Server specific ignores
+mcp-server/node_modules/
+mcp-server/dist/
+mcp-server/logs/
+
+# Logs
+logs/
+*.log
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Analysis data (generated, potentially large)
+analysis-data/
+# If you want to keep the JSON results but ignore temp files:
+# analysis-data/temp/
+
+# Operating System generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE / Editor specific files
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Test Results & Coverage
+coverage/
+junit.xml
