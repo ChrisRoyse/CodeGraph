@@ -1,0 +1,4 @@
+# Dependencies for SQL Analysis Service
+sqlparse
+grpcio
+protobuf

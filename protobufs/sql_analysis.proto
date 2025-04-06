@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package sql_analysis;
+
+// Enum for analysis status
+enum AnalysisStatus {
+  UNKNOWN = 0;
+  SUCCESS = 1;
+  FAILED = 2;
+}
+
+// Request message for SQL analysis
+message SqlAnalysisRequest {
+  string file_path = 1; // Path to the SQL file to analyze
+}
+
+// Response message for SQL analysis
+message SqlAnalysisResponse {
+  string analysis_results_json = 1; // JSON string containing analysis results
+  AnalysisStatus status = 2;        // Status of the analysis operation
+}
+
+// Service definition for SQL Analysis
+service SqlAnalysis {
+  // Analyzes a given SQL file and returns structured results
+  rpc AnalyzeSql(SqlAnalysisRequest) returns (SqlAnalysisResponse);
+}

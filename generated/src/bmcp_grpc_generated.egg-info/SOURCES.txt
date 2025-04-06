@@ -1,0 +1,6 @@
+setup.py
+src/bmcp_grpc_generated.egg-info/PKG-INFO
+src/bmcp_grpc_generated.egg-info/SOURCES.txt
+src/bmcp_grpc_generated.egg-info/dependency_links.txt
+src/bmcp_grpc_generated.egg-info/requires.txt
+src/bmcp_grpc_generated.egg-info/top_level.txt

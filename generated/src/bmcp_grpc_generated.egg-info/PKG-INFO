@@ -1,0 +1,5 @@
+Metadata-Version: 2.1
+Name: bmcp_grpc_generated
+Version: 0.1.0
+Requires-Dist: grpcio
+Requires-Dist: protobuf

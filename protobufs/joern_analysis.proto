@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package joern_analysis;
+
+// Service definition for Joern Analysis
+service JoernAnalysisService {
+  // RPC method to analyze code using Joern
+  rpc AnalyzeCode (AnalyzeCodeRequest) returns (AnalyzeCodeResponse);
+}
+
+// Request message for AnalyzeCode RPC
+message AnalyzeCodeRequest {
+  string code_path = 1; // Path to the code directory within the shared volume
+  string output_path = 2; // Path within the shared volume to save the Joern CPG output (e.g., cpg.bin)
+}
+
+// Response message for AnalyzeCode RPC
+message AnalyzeCodeResponse {
+  bool success = 1; // Indicates if the analysis was successful
+  string message = 2; // Provides details or error messages
+  string cpg_output_path = 3; // Confirms the path where the CPG was saved
+}

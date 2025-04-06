@@ -1,0 +1,133 @@
+# docker-compose.yml
+version: '3.8'
+
+networks:
+  bmcp_network:
+    driver: bridge
+
+volumes:
+  neo4j_data:
+  shared_code_input:
+  shared_cpg_output:
+
+services:
+# Neo4j service block removed to use external Neo4j Desktop instance
+  code_fetcher_service:
+    build:
+      context: ./code_fetcher_service
+      dockerfile: Dockerfile # Assuming Dockerfile exists
+    networks:
+      - bmcp_network
+    volumes:
+      - shared_code_input:/shared_data/code_input
+      # Mount test fixtures read-only so the fetcher can access local paths provided by gateway
+      - ./test_fixtures:/app/test_fixtures:ro
+      # Mount the test fixtures read-only if needed directly by fetcher (unlikely for URL fetch)
+      # - ./test_fixtures:/app/test_fixtures:ro
+    ports:
+      - "50051:50051" # Expose gRPC port if needed externally, otherwise just for internal comms
+    environment:
+      GRPC_PORT: 50051
+      SHARED_CODE_PATH: /shared_data/code_input
+    # depends_on removed as neo4j was the only dependency
+
+  joern_analysis_service:
+    build:
+      context: . # Changed context to project root
+      dockerfile: ./joern_analysis_service/Dockerfile # Explicitly specify Dockerfile path
+    networks:
+      - bmcp_network
+    volumes:
+      # Mount shared volumes using the base path expected by main.py
+      - shared_code_input:/analysis-data/code:ro # Read code input
+      - shared_cpg_output:/analysis-data/cpg # Write CPG output
+    ports:
+      - "50053:50053" # Correct gRPC port
+    environment:
+      GRPC_PORT: 50053 # Correct gRPC port
+      _JAVA_OPTS: ${JOERN_JAVA_OPTS:--Xmx4g} # Match Dockerfile, allow override via .env
+      # SHARED_VOLUME_BASE is hardcoded in main.py as /analysis-data
+    # healthcheck: # Healthcheck removed as grpc_health_probe cannot be easily installed in base image
+    #   # Assumes grpc_health_probe is installed in the image or added via Dockerfile
+    #   test: ["CMD", "grpc_health_probe", "-addr=localhost:50053"] # Correct port
+    #   interval: 15s
+    #   timeout: 5s
+    #   retries: 5
+    #   start_period: 30s # Give Joern time to initialize
+    depends_on:
+      - code_fetcher_service # Needs code to be fetched first
+
+
+
+# Old sql_analysis_service removed, replaced by treesitter_sql_analyzer
+
+  treesitter_sql_analyzer:
+    build:
+      context: ./treesitter_sql_analyzer
+      dockerfile: Dockerfile
+    networks:
+      - bmcp_network
+    volumes:
+      # Mount shared volume if needed for accessing code input
+      - shared_code_input:/shared_data/code_input:ro
+    ports:
+      - "50054:50054" # Expose gRPC port
+    environment:
+      GRPC_PORT: 50054 # Port the gRPC server listens on inside the container
+    depends_on:
+      - code_fetcher_service
+  neo4j_ingestion_service:
+    build:
+      context: ./neo4j_ingestion_service
+      dockerfile: Dockerfile # Assuming Dockerfile exists
+    networks:
+      - bmcp_network
+    volumes:
+      - shared_cpg_output:/shared_data/cpg_output:ro # Read CPG output
+    ports:
+      - "50055:50055" # Changed port to avoid conflict with Joern service
+    environment:
+      GRPC_PORT: 50055 # Changed port
+      SHARED_CPG_PATH: /shared_data/cpg_output
+      # Point to host machine's Neo4j Desktop instance
+      NEO4J_URI: bolt://host.docker.internal:7687
+      NEO4J_USER: neo4j # Use Desktop username
+      NEO4J_PASSWORD: test1234 # Use Desktop password
+    depends_on:
+      # Dependency on internal neo4j service removed
+      - joern_analysis_service # Wait for service to start
+
+  api_gateway:
+    build:
+      context: ./api_gateway
+      dockerfile: Dockerfile # Assuming Dockerfile exists
+    networks:
+      - bmcp_network
+    ports:
+      - "8000:8000" # Expose HTTP port for tests/users
+    volumes:
+      # Mount test fixtures so the gateway can resolve the path
+      - ./test_fixtures:/app/test_fixtures:ro
+      # Mount shared volume if gateway needs direct access (e.g., for status checks)
+      # - shared_code_input:/shared_data/code_input:ro
+    environment:
+      HTTP_PORT: 8000
+      CODE_FETCHER_SERVICE_ADDRESS: code_fetcher_service:50051
+      JOERN_ANALYSIS_SERVICE_ADDRESS: joern_analysis_service:50053 # Correct Joern port
+      NEO4J_INGESTION_SERVICE_ADDRESS: neo4j_ingestion_service:50055 # Correct Ingestion port
+      SQL_ANALYSIS_SERVICE_ADDRESS: treesitter_sql_analyzer:50054 # Updated service name
+
+      # Pass Neo4j details if gateway needs to query status directly
+      # Point to host machine's Neo4j Desktop instance
+      NEO4J_URI: bolt://host.docker.internal:7687
+      NEO4J_USER: neo4j # Use Desktop username
+      NEO4J_PASSWORD: test1234 # Use Desktop password
+      # Define the base path within the container for resolving local paths
+      PROJECT_BASE_PATH: /app
+    depends_on:
+      - code_fetcher_service
+      - joern_analysis_service
+      - neo4j_ingestion_service
+      - treesitter_sql_analyzer # Updated service name
+
+      # Dependency on internal neo4j service removed

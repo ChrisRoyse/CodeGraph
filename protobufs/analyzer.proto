@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package analyzer;
+
+// The request message containing the code to analyze
+message AnalyzeCodeRequest {
+  string file_path = 1; // Optional: Path of the file being analyzed
+  string file_content = 2; // The source code content
+  string language = 3; // The language identifier (e.g., "sql", "python")
+}
+
+// The response message confirming dispatch or containing basic results/status
+// Note: In the full architecture, the analyzer sends detailed results
+// directly to the ingestion service. This response is primarily for confirmation.
+message AnalyzeCodeResponse {
+  string status = 1; // e.g., "DISPATCHED", "ERROR"
+  string message = 2; // Optional details or error message
+}
+
+// The service definition for language analyzers
+service AnalyzerService {
+  // Analyzes the provided code
+  rpc AnalyzeCode (AnalyzeCodeRequest) returns (AnalyzeCodeResponse);
+}

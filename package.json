@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "build": "npm run clean && npm run build --workspaces --if-present && tsup",
-    "clean": "npx rimraf dist packages/analyzer-core/dist packages/watcher-service/dist mcp/dist",
+    "clean": "(rd /s /q dist || exit 0) && (rd /s /q packages\\analyzer-core\\dist || exit 0) && (rd /s /q packages\\watcher-service\\dist || exit 0) && (rd /s /q mcp\\dist || exit 0)",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "test": "vitest run",

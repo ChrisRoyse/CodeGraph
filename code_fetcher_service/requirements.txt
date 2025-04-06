@@ -1,0 +1,9 @@
+# Development/Testing Dependencies
+pytest>=7.0.0
+pytest-mock>=3.0.0
+
+# Core Dependencies
+grpcio
+grpcio-tools
+protobuf
+# Add git/vcs libraries later

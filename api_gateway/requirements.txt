@@ -1,0 +1,11 @@
+# Development/Testing Dependencies
+pytest>=7.0.0
+pytest-mock>=3.0.0
+requests>=2.25.0 # For sending requests in tests
+
+# Core Dependencies
+fastapi
+uvicorn[standard]
+grpcio
+grpcio-tools
+protobuf

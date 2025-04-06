@@ -1,6 +1,0 @@
-{
-  "../../def greet(name):\r\n    message = \"Hello, \" + name + \"!\"\r\n    print(message)\r\n    return message\r\n\r\ndef main():\r\n    result = greet(\"World\")\r\n\r\nif __name__ == \"__main__\":\r\n    main()": [
-    "connectome://simple_intra_file_py/variable:def greet(name):\r\n    message = \"Hello, \" + name + \"!\"\r\n    print(message)\r\n    return message\r\n\r\ndef main():\r\n    result = greet(\"World\")\r\n\r\nif __name__ == \"__main__\":\r\n    main():C",
-    "connectome://simple_intra_file_py/variable:def greet(name):\r\n    message = \"Hello, \" + name + \"!\"\r\n    print(message)\r\n    return message\r\n\r\ndef main():\r\n    result = greet(\"World\")\r\n\r\nif __name__ == \"__main__\":\r\n    main():C"
-  ]
-}

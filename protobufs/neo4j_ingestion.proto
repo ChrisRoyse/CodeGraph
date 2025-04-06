@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package neo4j_ingestion;
+
+// Import struct for generic properties
+import "google/protobuf/struct.proto";
+
+// Service to ingest CPG data into Neo4j
+service Neo4jIngestion {
+  // Ingests filtered CPG data and handles deletions for incremental updates
+  rpc IngestCpg (IngestCpgRequest) returns (IngestCpgResponse);
+}
+
+// Represents a node in the filtered CPG (mirrors definition in joern_analysis.proto)
+message FilteredNode {
+  string entity_id = 1; // Unique identifier for the node
+  string filepath = 2; // Filepath the node belongs to
+  google.protobuf.Struct properties = 3; // Node properties (flexible structure)
+}
+
+// Represents a relationship in the filtered CPG (mirrors definition in joern_analysis.proto)
+message FilteredRelationship {
+  string entity_id = 1; // Unique identifier for the relationship
+  string start_node_id = 2; // ID of the start node
+  string end_node_id = 3; // ID of the end node
+  string type = 4; // Type of the relationship
+  google.protobuf.Struct properties = 5; // Relationship properties (flexible structure)
+}
+
+// Request message for IngestCpg RPC for incremental updates
+message IngestCpgRequest {
+  repeated FilteredNode filtered_nodes = 1; // List of nodes relevant to changed files
+  repeated FilteredRelationship filtered_relationships = 2; // List of relationships relevant to changed files
+  repeated string deleted_files = 3; // List of deleted file paths
+  // string graph_id = 4; // Optional: Identifier for the graph instance in Neo4j
+}
+
+// Response message for IngestCpg RPC
+message IngestCpgResponse {
+  Status status = 1; // Status of the ingestion operation
+  string message = 2; // Optional message (e.g., error details, success confirmation)
+  // int32 nodes_processed = 3; // Optional: Count of nodes processed (merged/updated)
+  // int32 relationships_processed = 4; // Optional: Count of relationships processed (merged/updated)
+  // int32 nodes_deleted = 5; // Optional: Count of nodes deleted
+}
+
+// Enum for operation status (redefined for simplicity, ideally imported)
+enum Status {
+  UNKNOWN = 0;
+  SUCCESS = 1;
+  FAILURE = 2;
+  IN_PROGRESS = 3;
+}
