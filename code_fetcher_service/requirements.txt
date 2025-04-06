@@ -7,3 +7,5 @@ grpcio
 grpcio-tools
 protobuf
 # Add git/vcs libraries later
+
+grpcio-tools>=1.48.0 # For generating code during build

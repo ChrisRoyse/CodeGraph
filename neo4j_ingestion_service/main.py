@@ -11,20 +11,17 @@ import json
 from google.protobuf import json_format # Added for Struct conversion
 # Assuming protobufs are generated in a 'protobufs' directory relative to project root
 # and added to PYTHONPATH or installed. Adjust if necessary.
-# Add the generated protobuf code directory to the Python path
-GENERATED_SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'generated', 'src'))
-import sys
-if GENERATED_SRC_PATH not in sys.path:
-    sys.path.append(GENERATED_SRC_PATH)
+# Removed sys.path manipulation. Imports will use the generated package structure.
 
 # --- gRPC Imports ---
+# Import generated gRPC code using the package structure
 try:
-    import neo4j_ingestion_pb2
-    import neo4j_ingestion_pb2_grpc
+    from generated.src import neo4j_ingestion_pb2, neo4j_ingestion_pb2_grpc
     Status = neo4j_ingestion_pb2.Status # Use the enum from this service's proto
-except ImportError:
-    logging.error(f"Could not import generated gRPC modules. Did you run './generate_grpc.sh' and ensure '{GENERATED_SRC_PATH}' is in PYTHONPATH?")
-    sys.exit(1)
+    logger.info("Successfully imported generated gRPC modules.")
+except ImportError as e:
+    logging.error(f"Could not import generated gRPC modules from 'generated.src': {e}")
+    sys.exit(1) # Exit if imports fail, as the service cannot run
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 # --- Configuration ---

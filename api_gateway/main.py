@@ -2,9 +2,11 @@ import os
 import sys
 import subprocess # Added for git diff
 from fastapi import FastAPI, HTTPException, Body
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, Field
 import grpc
 import logging
+import asyncio # For potential parallel dispatch
+from typing import Dict, Optional, List, Tuple # For type hinting
 # --- Configuration ---
 # Service Addresses from Environment Variables
 CODE_FETCHER_HOST = os.getenv("CODE_FETCHER_HOST", "localhost")
@@ -24,31 +26,32 @@ SQL_ANALYSIS_HOST = os.getenv("SQL_ANALYSIS_HOST", "localhost")
 SQL_ANALYSIS_PORT = os.getenv("SQL_ANALYSIS_PORT", "50054")
 SQL_ANALYSIS_ADDR = f"{SQL_ANALYSIS_HOST}:{SQL_ANALYSIS_PORT}"
 
-# Add the generated protobuf code directory to the Python path
-# This is one way to make the generated code importable.
-# Alternatively, install the 'generated' directory as a package.
-GENERATED_SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'generated', 'src'))
-if GENERATED_SRC_PATH not in sys.path:
-    sys.path.append(GENERATED_SRC_PATH)
+# Removed sys.path manipulation. Imports will use the generated package structure.
 
 # --- gRPC Imports ---
 # Import generated gRPC code (ensure generate_grpc.sh has been run)
+# Import generated gRPC code using the package structure
 try:
-    import code_fetcher_pb2
-    import code_fetcher_pb2_grpc
-    import joern_analysis_pb2
-    import joern_analysis_pb2_grpc
-    import neo4j_ingestion_pb2
-    import neo4j_ingestion_pb2_grpc
-    import sql_analysis_pb2
-    import sql_analysis_pb2_grpc
-
+    from generated.src import (
+        code_fetcher_pb2,
+        code_fetcher_pb2_grpc,
+        joern_analysis_pb2,
+        joern_analysis_pb2_grpc,
+        neo4j_ingestion_pb2,
+        neo4j_ingestion_pb2_grpc,
+        sql_analysis_pb2,
+        sql_analysis_pb2_grpc,
+        analyzer_pb2,
+        analyzer_pb2_grpc
+    )
     # Assuming Status enum is consistent (defined in one, used by all for simplicity here)
-    # If they differ significantly, import each specifically.
     Status = code_fetcher_pb2.Status # Use the one from code_fetcher as the reference
-except ImportError:
-    logging.error(f"Could not import generated gRPC modules. Did you run './generate_grpc.sh' and ensure '{GENERATED_SRC_PATH}' is in PYTHONPATH?")
-    # Allow app to start but endpoint will fail if imports are missing
+    CORE_GRPC_MODULES_LOADED = True
+    logger.info("Successfully imported generated gRPC modules.")
+except ImportError as e:
+    logger.error(f"Could not import generated gRPC modules from 'generated.src': {e}")
+    # Set flags/placeholders to indicate failure
+    CORE_GRPC_MODULES_LOADED = False
     code_fetcher_pb2 = None
     code_fetcher_pb2_grpc = None
     joern_analysis_pb2 = None
@@ -57,8 +60,9 @@ except ImportError:
     neo4j_ingestion_pb2_grpc = None
     sql_analysis_pb2 = None
     sql_analysis_pb2_grpc = None
-
-    Status = None # Define Status as None if imports fail
+    analyzer_pb2 = None
+    analyzer_pb2_grpc = None
+    Status = None
 
 
 # --- FastAPI Setup ---
@@ -161,6 +165,9 @@ class AnalysisRequest(BaseModel):
     repo_url: HttpUrl
     current_commit_sha: str # Required for both full and incremental analysis
     previous_commit_sha: str | None = None # If provided, triggers incremental analysis
+
+class LocalAnalysisRequest(BaseModel):
+    directory_path: str = Field(..., description="Absolute path accessible within the container")
 # --- API Endpoints ---
 @app.post("/analyze", summary="Trigger Code Analysis (Full or Incremental)")
 async def trigger_analysis(request: AnalysisRequest = Body(...)):
@@ -179,14 +186,9 @@ async def trigger_analysis(request: AnalysisRequest = Body(...)):
     else:
         logger.info("  Full Analysis (no previous SHA provided)")
     # Check if gRPC modules were loaded correctly
-    if not all([code_fetcher_pb2, code_fetcher_pb2_grpc,
-                joern_analysis_pb2, joern_analysis_pb2_grpc,
-                neo4j_ingestion_pb2, neo4j_ingestion_pb2_grpc,
-                 sql_analysis_pb2, sql_analysis_pb2_grpc,
-
-                Status]):
-        logger.error("gRPC modules not loaded. Cannot proceed.")
-        raise HTTPException(status_code=500, detail="Internal server error: gRPC modules not loaded. Check server logs.")
+    if not CORE_GRPC_MODULES_LOADED:
+        logger.error("Core gRPC modules not loaded during startup. Cannot proceed with analysis.")
+        raise HTTPException(status_code=500, detail="Internal server error: Core gRPC modules not loaded.")
 
     code_path = None
     changed_files = []
@@ -399,6 +401,142 @@ async def trigger_analysis(request: AnalysisRequest = Body(...)):
         "code_path": code_path,
         "analysis_details": analysis_details
     }
+
+# --- Endpoint for Local Directory Analysis ---
+@app.post("/analyze-local", summary="Trigger Analysis for a Local Directory")
+async def trigger_local_analysis(request: LocalAnalysisRequest = Body(...)):
+    """
+    Receives a local directory path (accessible within the container),
+    scans for supported files, and dispatches analysis requests to
+    appropriate language analyzer services via gRPC.
+    """
+    logger.info(f"Received local analysis request for directory: {request.directory_path}")
+
+    # --- Basic Validation and Setup ---
+    if not os.path.isdir(request.directory_path):
+        logger.error(f"Provided path is not a valid directory inside the container: {request.directory_path}")
+        raise HTTPException(status_code=400, detail=f"Invalid directory_path: Not found or not a directory inside the container.")
+
+    # Check if gRPC modules were loaded correctly (including new analyzer)
+    if not CORE_GRPC_MODULES_LOADED:
+        logger.error("Core gRPC modules not loaded during startup. Cannot proceed with local analysis.")
+        raise HTTPException(status_code=500, detail="Internal server error: Core gRPC modules not loaded.")
+
+    supported_extensions = {
+        ".py": "python",
+        ".js": "javascript",
+        ".jsx": "javascript", # Assuming JSX uses JS grammar for now
+        ".ts": "typescript",
+        ".tsx": "tsx",
+        ".c": "c",
+        ".cpp": "cpp",
+        ".h": "cpp", # Often use cpp grammar for headers
+        ".hpp": "cpp",
+        ".cs": "csharp",
+        ".go": "go",
+        ".java": "java",
+        ".rs": "rust",
+        ".sql": "sql",
+    }
+    # Map language to its gRPC service address (from env vars)
+    # Using the map defined in parser-service refactor
+    # Map language to its gRPC service address (from env vars)
+    # Using Python type hints
+    analyzer_service_addresses: Dict[str, Optional[str]] = {
+        # Dynamically create entries for base languages
+        lang: os.getenv(f"{lang.upper()}_ANALYZER_ADDRESS")
+        for lang in set(supported_extensions.values()) # Use set to avoid duplicates
+    }
+    # Special handling for potentially combined services or different env var names
+    analyzer_service_addresses["sql"] = os.getenv("SQL_ANALYSIS_SERVICE_ADDRESS", SQL_ANALYSIS_ADDR) # Use specific var if set
+    analyzer_service_addresses["java"] = os.getenv("JOERN_ANALYSIS_SERVICE_ADDRESS", JOERN_ANALYSIS_ADDR) # Joern handles Java
+    # Add other mappings as needed (e.g., C/CPP to Joern)
+    analyzer_service_addresses["c"] = os.getenv("JOERN_ANALYSIS_SERVICE_ADDRESS", JOERN_ANALYSIS_ADDR)
+    analyzer_service_addresses["cpp"] = os.getenv("JOERN_ANALYSIS_SERVICE_ADDRESS", JOERN_ANALYSIS_ADDR)
+
+
+    files_to_process: List[Tuple[str, str]] = [] # List of (language, absolute_path)
+
+    # --- Scan Directory ---
+    logger.info(f"Scanning directory '{request.directory_path}' for supported files...")
+    for root, _, files in os.walk(request.directory_path):
+        # Basic ignore patterns (can be expanded)
+        if '.git' in root.split(os.sep) or 'node_modules' in root.split(os.sep) or '__pycache__' in root.split(os.sep):
+            continue
+        for file in files:
+            ext = os.path.splitext(file)[1].lower()
+            language = supported_extensions.get(ext)
+            if language:
+                full_path = os.path.join(root, file)
+                files_to_process.append((language, full_path))
+
+    logger.info(f"Found {len(files_to_process)} supported files to analyze.")
+
+    # --- Dispatch Analysis Requests (Asynchronously) ---
+    # Note: This dispatches sequentially for simplicity. Consider asyncio.gather for parallelism.
+    dispatch_success_count = 0
+    dispatch_error_count = 0
+    dispatch_errors = []
+
+    for language, file_path in files_to_process:
+        logger.debug(f"Processing file: {file_path} (Language: {language})")
+        target_address = analyzer_service_addresses.get(language)
+
+        if not target_address:
+            logger.warning(f"No analyzer service configured for language '{language}'. Skipping file: {file_path}")
+            dispatch_error_count += 1
+            dispatch_errors.append(f"No service for {language} ({file_path})")
+            continue
+
+        try:
+            # Read file content
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                file_content = f.read()
+
+            # Create gRPC client and request
+            async with grpc.aio.insecure_channel(target_address) as channel:
+                 # Use the generic AnalyzerService stub
+                stub = analyzer_pb2_grpc.AnalyzerServiceStub(channel)
+                grpc_request = analyzer_pb2.AnalyzeCodeRequest(
+                    file_path=file_path, # Send absolute path within container
+                    file_content=file_content,
+                    language=language
+                )
+
+                logger.info(f"Calling AnalyzeCode RPC on {target_address} for {file_path}")
+                response = await stub.AnalyzeCode(grpc_request, timeout=60.0) # Add timeout
+
+                if response.status == "SUCCESS" or response.status == "DISPATCHED": # Adjust based on analyzer response design
+                    logger.info(f"Successfully dispatched analysis for {file_path} to {target_address}. Response: {response.message}")
+                    dispatch_success_count += 1
+                else:
+                    logger.error(f"Analyzer service for {language} at {target_address} failed for {file_path}: {response.message}")
+                    dispatch_error_count += 1
+                    dispatch_errors.append(f"{language} analyzer error ({file_path}): {response.message}")
+
+        except grpc.aio.AioRpcError as e:
+            logger.error(f"gRPC call to {target_address} for {file_path} failed: {e.details()} (Code: {e.code()})")
+            dispatch_error_count += 1
+            dispatch_errors.append(f"gRPC error calling {language} analyzer ({file_path}): {e.details()}")
+        except FileNotFoundError:
+             logger.error(f"File not found during read: {file_path}. Skipping.")
+             dispatch_error_count += 1
+             dispatch_errors.append(f"File not found: {file_path}")
+        except Exception as e:
+            logger.exception(f"Unexpected error processing file {file_path}")
+            dispatch_error_count += 1
+            dispatch_errors.append(f"Unexpected error for {file_path}: {str(e)}")
+
+    # --- Return Summary ---
+    summary_message = f"Analysis dispatch summary: {dispatch_success_count} succeeded, {dispatch_error_count} failed."
+    logger.info(summary_message)
+
+    if dispatch_error_count > 0:
+         # Return a partial success status if some dispatches failed
+         # Consider returning 500 if a critical number failed
+         return {"message": summary_message, "errors": dispatch_errors}
+    else:
+        return {"message": summary_message}
 
 @app.get("/health", summary="Health Check")
 async def health_check():

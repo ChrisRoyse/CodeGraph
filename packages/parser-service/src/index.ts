@@ -10,9 +10,10 @@ import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import * as path from 'path';
 
-// Define the path to the protobuf definition
-// Assuming a common proto file for all analyzer services
-const PROTO_PATH = path.join(__dirname, '../../../../protobufs/analyzer.proto'); // Adjust path as needed
+// Define the path to the protobuf definition relative to the project root
+// Assumes the script is run from the project root (e.g., c:/code/bmcp)
+const PROJECT_ROOT = path.resolve(__dirname, '../../..'); // Adjust based on actual dist structure if needed
+const PROTO_PATH = path.join(PROJECT_ROOT, 'protobufs/analyzer.proto');
 
 // Load the protobuf
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {

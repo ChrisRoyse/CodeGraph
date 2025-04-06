@@ -9,3 +9,5 @@ uvicorn[standard]
 grpcio
 grpcio-tools
 protobuf
+
+grpcio-tools>=1.48.0 # For generating code during build

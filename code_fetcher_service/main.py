@@ -10,16 +10,12 @@ from fetcher import fetch_repository # Import the new function
 # Assuming protobufs are compiled and available in the path
 # If not, ensure generate_grpc.sh has been run and adjust imports if needed.
 # Example: sys.path.append('../protobufs')
+# Import generated gRPC code using the package structure
 try:
-    import code_fetcher_pb2
-    import code_fetcher_pb2_grpc
-except ImportError:
-    logging.error("Failed to import generated protobuf files. Make sure they are generated and in the Python path.")
-    # Depending on project structure, might need:
-    # import sys
-    # sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'protobufs')) # Adjust relative path as needed
-    # import code_fetcher_pb2
-    # import code_fetcher_pb2_grpc
+    from generated.src import code_fetcher_pb2, code_fetcher_pb2_grpc
+    logger.info("Successfully imported generated gRPC modules.")
+except ImportError as e:
+    logging.error(f"Failed to import generated protobuf files from 'generated.src': {e}")
     exit(1) # Exit if imports fail, as the service cannot run
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
