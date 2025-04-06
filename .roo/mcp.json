@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "bmcp-code-analyzer": {
+      "command": "node",
+      "args": [
+        "c:/code/bmcp/mcp/dist/index.js"
+      ],
+      "disabled": true,
+      "alwaysAllow": [
+        "run_analyzer",
+        "start_watcher",
+        "stop_watcher"
+      ]
+    }
+  }
+}

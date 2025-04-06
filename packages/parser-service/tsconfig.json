@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Inherit moduleResolution: "NodeNext" and module: "NodeNext" from base
+    "outDir": "./dist", // Output directory for compiled files
+    "rootDir": "./src", // Source directory
+    "composite": true, // Enable project references for monorepo builds
+    "declaration": true, // Generate .d.ts files
+    "declarationMap": true, // Generate source maps for .d.ts files
+    "sourceMap": true // Generate source maps for .js files
+    // module and moduleResolution are inherited from tsconfig.base.json
+  },
+  "include": ["src/**/*.ts"], // Only include source files within the rootDir
+  "exclude": ["node_modules", "dist", "tests"] // Exclude build outputs and tests
+}

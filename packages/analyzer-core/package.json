@@ -1,0 +1,55 @@
+{
+  "name": "@bmcp/analyzer-core",
+  "version": "1.0.0",
+  "description": "Core analysis logic (parsers, types, utils) for BMCP",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "require": "./dist/*.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "echo \"Error: no test specified for core\" && exit 1"
+  },
+  "keywords": [
+    "code-analysis",
+    "ast",
+    "static-analysis"
+  ],
+  "author": "Roo",
+  "license": "MIT",
+  "dependencies": {
+    "@bmcp/grammar-loader": "file:../grammar-loader",
+    "dotenv": "^16.3.1",
+    "ignore": "^7.0.3",
+    "neo4j-driver": "^5.12.0",
+    "node-sql-parser": "^5.3.8",
+    "tree-sitter": "^0.22.4",
+    "ts-morph": "^20.0.0",
+    "typescript": "^5.8.2",
+    "uuid": "^11.1.0",
+    "winston": "^3.10.0"
+  },
+  "devDependencies": {
+    "@nestjs/config": "^4.0.2",
+    "@types/commander": "^2.12.5",
+    "@types/micromatch": "^4.0.9",
+    "@types/node": "^22.14.0",
+    "@types/uuid": "^10.0.0",
+    "micromatch": "^4.0.8",
+    "tsup": "^8.4.0",
+    "vitest": "^3.1.1",
+    "web-tree-sitter": "^0.25.3"
+  }
+}

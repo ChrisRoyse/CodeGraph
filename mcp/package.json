@@ -1,0 +1,38 @@
+{
+  "name": "code-analyzer-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server to run the code analyzer CLI",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts", 
+  "type": "module",
+  "exports": { 
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mcp",
+    "code-analysis"
+  ],
+  "author": "Roo",
+  "license": "MIT",
+  "dependencies": {
+    "@bmcp/analyzer-core": "file:../packages/analyzer-core",
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "chokidar": "^4.0.3",
+    "execa": "^8.0.1",
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.24.5"
+  }
+}

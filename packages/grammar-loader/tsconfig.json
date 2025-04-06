@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext", // Align with base config's moduleResolution
+    "outDir": "./dist", // Output directory for compiled files
+    "rootDir": "./src", // Source directory
+    "declaration": true, // Generate .d.ts files
+    "declarationMap": true, // Generate declaration maps
+    "composite": true // Enable project references if needed later
+    // No baseUrl or paths needed for this simple package
+  },
+  "include": ["src/**/*"], // Only compile files in the src directory
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"]
+}

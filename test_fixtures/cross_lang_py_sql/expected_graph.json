@@ -1,0 +1,86 @@
+{
+  "nodes": [
+    { "labels": ["Directory"], "properties": { "path": "test_fixtures/cross_lang_py_sql" } },
+    { "labels": ["File"], "properties": { "path": "test_fixtures/cross_lang_py_sql/schema.sql", "language": "sql", "lines_of_code": 11 } },
+    { "labels": ["File"], "properties": { "path": "test_fixtures/cross_lang_py_sql/db_ops.py", "language": "python", "lines_of_code": 47 } },
+
+    { "labels": ["DatabaseTable"], "properties": { "name": "users", "schema_source": "test_fixtures/cross_lang_py_sql/schema.sql" } },
+    { "labels": ["DatabaseColumn"], "properties": { "name": "id", "table_name": "users", "fqn": "users.id", "data_type": "INTEGER" } },
+    { "labels": ["DatabaseColumn"], "properties": { "name": "name", "table_name": "users", "fqn": "users.name", "data_type": "TEXT" } },
+    { "labels": ["DatabaseColumn"], "properties": { "name": "email", "table_name": "users", "fqn": "users.email", "data_type": "TEXT" } },
+    { "labels": ["DatabaseTable"], "properties": { "name": "products", "schema_source": "test_fixtures/cross_lang_py_sql/schema.sql" } },
+    { "labels": ["DatabaseColumn"], "properties": { "name": "product_id", "table_name": "products", "fqn": "products.product_id", "data_type": "INTEGER" } },
+    { "labels": ["DatabaseColumn"], "properties": { "name": "product_name", "table_name": "products", "fqn": "products.product_name", "data_type": "TEXT" } },
+    { "labels": ["DatabaseColumn"], "properties": { "name": "price", "table_name": "products", "fqn": "products.price", "data_type": "REAL" } },
+
+    { "labels": ["Variable"], "properties": { "name": "DATABASE", "fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::DATABASE", "file_path": "test_fixtures/cross_lang_py_sql/db_ops.py", "start_line": 3, "end_line": 3, "data_type": "str", "scope": "module" } },
+    { "labels": ["Function"], "properties": { "name": "get_connection", "fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_connection", "file_path": "test_fixtures/cross_lang_py_sql/db_ops.py", "start_line": 5, "end_line": 7, "signature": "get_connection()", "is_method": false, "is_async": false, "is_constructor": false } },
+    { "labels": ["Function"], "properties": { "name": "add_user", "fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user", "file_path": "test_fixtures/cross_lang_py_sql/db_ops.py", "start_line": 9, "end_line": 19, "signature": "add_user(name, email)", "is_method": false, "is_async": false, "is_constructor": false } },
+    { "labels": ["Parameter"], "properties": { "name": "name", "fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user::name", "data_type": "unknown", "index": 0 } },
+    { "labels": ["Parameter"], "properties": { "name": "email", "fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user::email", "data_type": "unknown", "index": 1 } },
+    { "labels": ["SQLQuery"], "properties": { "text_hash": "hash_insert_user", "file_path": "test_fixtures/cross_lang_py_sql/db_ops.py", "start_line": 12, "end_line": 12 } },
+    { "labels": ["Function"], "properties": { "name": "get_user_by_email", "fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_user_by_email", "file_path": "test_fixtures/cross_lang_py_sql/db_ops.py", "start_line": 21, "end_line": 29, "signature": "get_user_by_email(email)", "is_method": false, "is_async": false, "is_constructor": false } },
+    { "labels": ["Parameter"], "properties": { "name": "email", "fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_user_by_email::email", "data_type": "unknown", "index": 0 } },
+    { "labels": ["SQLQuery"], "properties": { "text_hash": "hash_select_user_fstring", "file_path": "test_fixtures/cross_lang_py_sql/db_ops.py", "start_line": 25, "end_line": 25 } },
+    { "labels": ["Function"], "properties": { "name": "get_expensive_products", "fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_expensive_products", "file_path": "test_fixtures/cross_lang_py_sql/db_ops.py", "start_line": 31, "end_line": 41, "signature": "get_expensive_products(min_price)", "is_method": false, "is_async": false, "is_constructor": false } },
+    { "labels": ["Parameter"], "properties": { "name": "min_price", "fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_expensive_products::min_price", "data_type": "unknown", "index": 0 } },
+    { "labels": ["SQLQuery"], "properties": { "text_hash": "hash_select_products", "file_path": "test_fixtures/cross_lang_py_sql/db_ops.py", "start_line": 34, "end_line": 38 } }
+  ],
+  "relationships": [
+    { "source_fqn": "test_fixtures/cross_lang_py_sql", "target_fqn": "test_fixtures/cross_lang_py_sql/schema.sql", "type": "CONTAINS", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py", "type": "CONTAINS", "properties": {} },
+
+    { "source_fqn": "users", "target_fqn": "test_fixtures/cross_lang_py_sql/schema.sql", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "users.id", "target_fqn": "test_fixtures/cross_lang_py_sql/schema.sql", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "users.name", "target_fqn": "test_fixtures/cross_lang_py_sql/schema.sql", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "users.email", "target_fqn": "test_fixtures/cross_lang_py_sql/schema.sql", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "products", "target_fqn": "test_fixtures/cross_lang_py_sql/schema.sql", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "products.product_id", "target_fqn": "test_fixtures/cross_lang_py_sql/schema.sql", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "products.product_name", "target_fqn": "test_fixtures/cross_lang_py_sql/schema.sql", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "products.price", "target_fqn": "test_fixtures/cross_lang_py_sql/schema.sql", "type": "DEFINED_IN", "properties": {} },
+
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::DATABASE", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_connection", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user::name", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user::email", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "hash_insert_user", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_user_by_email", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_user_by_email::email", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "hash_select_user_fstring", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_expensive_products", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_expensive_products::min_price", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py", "type": "DEFINED_IN", "properties": {} },
+    { "source_fqn": "hash_select_products", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py", "type": "DEFINED_IN", "properties": {} },
+
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_connection", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::DATABASE", "type": "USES_VARIABLE", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user::name", "type": "HAS_PARAMETER", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user::email", "type": "HAS_PARAMETER", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_connection", "type": "CALLS", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user", "target_fqn": "hash_insert_user", "type": "EXECUTES_QUERY", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user::name", "type": "USES_VARIABLE", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::add_user::email", "type": "USES_VARIABLE", "properties": {} },
+
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_user_by_email", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_user_by_email::email", "type": "HAS_PARAMETER", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_user_by_email", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_connection", "type": "CALLS", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_user_by_email", "target_fqn": "hash_select_user_fstring", "type": "EXECUTES_QUERY", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_user_by_email", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_user_by_email::email", "type": "USES_VARIABLE", "properties": {} },
+
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_expensive_products", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_expensive_products::min_price", "type": "HAS_PARAMETER", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_expensive_products", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_connection", "type": "CALLS", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_expensive_products", "target_fqn": "hash_select_products", "type": "EXECUTES_QUERY", "properties": {} },
+    { "source_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_expensive_products", "target_fqn": "test_fixtures/cross_lang_py_sql/db_ops.py::get_expensive_products::min_price", "type": "USES_VARIABLE", "properties": {} },
+
+    { "source_fqn": "hash_insert_user", "target_fqn": "users", "type": "REFERENCES_TABLE", "properties": {} },
+    { "source_fqn": "hash_insert_user", "target_fqn": "users.name", "type": "REFERENCES_COLUMN", "properties": {} },
+    { "source_fqn": "hash_insert_user", "target_fqn": "users.email", "type": "REFERENCES_COLUMN", "properties": {} },
+
+    { "source_fqn": "hash_select_user_fstring", "target_fqn": "users", "type": "REFERENCES_TABLE", "properties": {} },
+    { "source_fqn": "hash_select_user_fstring", "target_fqn": "users.id", "type": "REFERENCES_COLUMN", "properties": {} },
+    { "source_fqn": "hash_select_user_fstring", "target_fqn": "users.name", "type": "REFERENCES_COLUMN", "properties": {} },
+    { "source_fqn": "hash_select_user_fstring", "target_fqn": "users.email", "type": "REFERENCES_COLUMN", "properties": {} },
+
+    { "source_fqn": "hash_select_products", "target_fqn": "products", "type": "REFERENCES_TABLE", "properties": {} },
+    { "source_fqn": "hash_select_products", "target_fqn": "products.product_name", "type": "REFERENCES_COLUMN", "properties": {} },
+    { "source_fqn": "hash_select_products", "target_fqn": "products.price", "type": "REFERENCES_COLUMN", "properties": {} }
+  ]
+}

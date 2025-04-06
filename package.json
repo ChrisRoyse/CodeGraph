@@ -1,0 +1,70 @@
+{
+  "name": "amcp-rebuilt",
+  "version": "1.0.0",
+  "description": "Codebase analysis tool generating a Neo4j graph",
+  "main": "dist/index.js",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "packages/grammar-loader",
+    "packages/watcher-service",
+    "mcp"
+  ],
+  "scripts": {
+    "build": "npm run clean && npm run build --workspaces --if-present && tsup",
+    "clean": "npx rimraf dist packages/analyzer-core/dist packages/watcher-service/dist mcp/dist",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run src/__tests__/integration",
+    "test:unit": "vitest run src/**/*.spec.ts",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "analyze": "npm run build && node dist/index.js analyze"
+  },
+  "keywords": [
+    "code-analysis",
+    "neo4j",
+    "typescript",
+    "javascript",
+    "ast",
+    "static-analysis",
+    "codegraph"
+  ],
+  "author": "AI Assistant Roo",
+  "license": "MIT",
+  "dependencies": {
+    "@alanse/mcp-neo4j-server": "^0.1.1",
+    "@bmcp/analyzer-core": "file:packages/analyzer-core",
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "@xenova/transformers": "^2.17.2",
+    "chokidar": "^3.5.3",
+    "chromadb-client": "^2.1.0",
+    "commander": "^11.0.0",
+    "neo4j-driver": "^5.28.1"
+  },
+  "devDependencies": {
+    "@testcontainers/neo4j": "^10.23.0",
+    "@types/chokidar": "2.1.7",
+    "@types/commander": "2.12.5",
+    "@types/fs-extra": "11.0.4",
+    "@types/micromatch": "4.0.9",
+    "@types/node": "22.14.0",
+    "@typescript-eslint/eslint-plugin": "^6.6.0",
+    "@typescript-eslint/parser": "^6.6.0",
+    "cross-env": "^7.0.3",
+    "eslint": "^8.48.0",
+    "fs-extra": "^11.3.0",
+    "prettier": "^3.0.3",
+    "rimraf": "^6.0.1",
+    "testcontainers": "^10.23.0",
+    "ts-node": "^10.9.2",
+    "tsup": "^8.4.0",
+    "typescript": "5.8.2",
+    "vitest": "^3.1.1",
+    "tree-sitter-cli": "^0.22.6"
+  },
+  "overrides": {
+  }
+}

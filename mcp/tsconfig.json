@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    /* Package Specific Settings - Inherited from base */
+    // NO baseUrl, paths, rootDir, outDir, composite, declarationMap, or references here
+  },
+  "include": ["src/**/*"], // Only include source files within this package
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"]
+}

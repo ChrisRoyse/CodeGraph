@@ -1,0 +1,26 @@
+{
+  "name": "@bmcp/grammar-loader",
+  "version": "1.0.0",
+  "description": "CommonJS helper package to load tree-sitter grammars.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsup",
+    "clean": "rimraf dist"
+  },
+  "keywords": [
+    "tree-sitter",
+    "grammar",
+    "loader",
+    "commonjs"
+  ],
+  "author": "AI Assistant Roo",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "rimraf": "^5.0.5",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  }
+}

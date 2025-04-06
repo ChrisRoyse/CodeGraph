@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    /* Base Options: */
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "ES2022",
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+    "isolatedModules": true,
+
+    /* Strictness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+
+    /* Module Resolution */
+    "moduleResolution": "NodeNext",
+    "module": "NodeNext", // Align with moduleResolution
+
+    /* Path Aliases - Point ONLY to dist */
+    "baseUrl": ".", // Needed for paths
+    "paths": {
+      "@bmcp/*": [
+"packages/*", "mcp/*"] // Point to source for tsup/paths
+    },
+
+    /* Emit */
+    "declaration": true,
+    "sourceMap": true,
+
+    /* Libs */
+    "lib": ["es2022", "dom", "dom.iterable"],
+
+    /* Framework */
+    "jsx": "react-jsx"
+  }
+}

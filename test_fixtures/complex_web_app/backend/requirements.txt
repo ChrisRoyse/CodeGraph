@@ -1,0 +1,2 @@
+Flask>=2.0
+# Add other dependencies like a DB driver if needed, e.g., psycopg2-binary or mysql-connector-python

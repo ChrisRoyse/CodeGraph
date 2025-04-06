@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    /* Root Project Specific Settings - Inherited from base */
+    // NO baseUrl, paths, outDir, composite, declarationMap, or references here
+  },
+  "include": ["src/**/*"], // Only include root project source
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "packages", // Exclude package source from root compilation
+    "mcp" // Exclude mcp source from root compilation
+  ]
+}
