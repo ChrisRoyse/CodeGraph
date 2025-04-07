@@ -7,6 +7,12 @@ import grpc
 import logging
 import asyncio # For potential parallel dispatch
 from typing import Dict, Optional, List, Tuple # For type hinting
+import logging
+
+# --- Logging Setup ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 # --- Configuration ---
 # Service Addresses from Environment Variables
 CODE_FETCHER_HOST = os.getenv("CODE_FETCHER_HOST", "localhost")
@@ -72,8 +78,6 @@ app = FastAPI(
     version="0.1.0",
 )
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 # --- Helper Function ---
 def get_changed_files(repo_path: str, old_sha: str, new_sha: str) -> tuple[list[str], list[str]]:

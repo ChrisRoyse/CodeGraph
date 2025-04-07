@@ -1,0 +1,19 @@
+{
+  "name": "typescript_analyzer_service",
+  "version": "1.0.0",
+  "description": "gRPC service for analyzing TypeScript/TSX code using Tree-sitter",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "generate": "mkdir -p generated/src && grpc_tools_node_protoc --js_out=import_style=commonjs,binary:generated/src --grpc_out=grpc_js:generated/src -I=/app/protobufs /app/protobufs/analyzer.proto"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.10.0",
+    "@grpc/proto-loader": "^0.7.10",
+    "tree-sitter": "^0.21.0",
+    "tree-sitter-typescript": "^0.20.0"
+  },
+  "devDependencies": {
+    "grpc-tools": "^1.12.4"
+  }
+}

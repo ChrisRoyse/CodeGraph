@@ -1,0 +1,5 @@
+grpcio
+grpcio-tools
+# For Tree-sitter parsing
+tree-sitter
+tree-sitter-languages
