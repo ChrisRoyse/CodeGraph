@@ -5,9 +5,10 @@ from fastapi import FastAPI, HTTPException, Body
 from pydantic import BaseModel, HttpUrl, Field
 import grpc
 import logging
-import asyncio # For potential parallel dispatch
-from typing import Dict, Optional, List, Tuple # For type hinting
+import asyncio
+from typing import Dict, Optional, List, Tuple, Any # For type hinting
 import logging
+import uuid # For generating batch IDs
 
 # --- Logging Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -406,13 +407,172 @@ async def trigger_analysis(request: AnalysisRequest = Body(...)):
         "analysis_details": analysis_details
     }
 
+# --- Helper Function for Dispatching Analysis ---
+async def dispatch_analysis(language: str, file_path: str, file_content: str, target_address: str) -> Optional[analyzer_pb2.AnalysisResult]:
+    """Sends an analysis request to a specific language analyzer service."""
+    logger.debug(f"Dispatching analysis for {file_path} ({language}) to {target_address}")
+    try:
+        async with grpc.aio.insecure_channel(target_address) as channel:
+            stub = analyzer_pb2_grpc.AnalyzerServiceStub(channel)
+            grpc_request = analyzer_pb2.AnalyzeCodeRequest(
+                file_path=file_path,
+                file_content=file_content,
+                language=language
+            )
+            # Increased timeout for potentially complex analysis
+            response = await stub.AnalyzeCode(grpc_request, timeout=120.0)
+            logger.debug(f"Received response from {target_address} for {file_path}: Status={response.status}")
+            if response.status == "SUCCESS": # Assuming SUCCESS is the primary success indicator
+                return response
+            else:
+                # Log non-success status from analyzer as a warning/error
+                logger.error(f"Analyzer service for {language} at {target_address} returned status '{response.status}' for {file_path}: {response.error_message}")
+                # Return the result even if not SUCCESS, orchestration might handle partial data
+                return response # Or return None if only SUCCESS is acceptable downstream
+
+    except grpc.aio.AioRpcError as e:
+        logger.error(f"gRPC call to {target_address} for {file_path} failed: {e.details()} (Code: {e.code()})")
+        return None # Indicate gRPC communication failure
+    except Exception as e:
+        logger.exception(f"Unexpected error during dispatch for {file_path} to {target_address}")
+        return None # Indicate unexpected failure
+
+# --- Helper Function for Orchestration ---
+def orchestrate_results(analysis_results: List[analyzer_pb2.AnalysisResult]) -> Tuple[List[neo4j_ingestion_pb2.GraphNode], List[neo4j_ingestion_pb2.GraphRelationship]]:
+    """
+    Aggregates results from multiple analyzers, resolves IDs/types (placeholder),
+    and creates unified GraphNode and GraphRelationship messages.
+    """
+    logger.info(f"Starting orchestration for {len(analysis_results)} analysis results.")
+    unified_nodes: List[neo4j_ingestion_pb2.GraphNode] = []
+    unified_relationships: List[neo4j_ingestion_pb2.GraphRelationship] = []
+    # Map: (analyzer_name, file_path, local_id) -> global_id
+    local_to_global_id_map: Dict[Tuple[str, str, int], str] = {}
+    node_counter = 0 # Simple counter for placeholder uniqueness
+
+    # --- First Pass: Create Nodes and Map IDs ---
+    for result in analysis_results:
+        # Skip results that are None (dispatch error) or have an error status
+        if not result or result.status != "SUCCESS":
+            logger.warning(f"Skipping orchestration for failed/missing result: Analyzer={getattr(result, 'analyzer_name', 'N/A')}, File={getattr(result, 'file_path', 'N/A')}, Status={getattr(result, 'status', 'N/A')}")
+            continue
+
+        logger.debug(f"Orchestrating nodes from {result.analyzer_name} for {result.file_path} ({len(result.nodes)} nodes)")
+        for node in result.nodes:
+            # Placeholder global ID generation: Use analyzer, file, local ID, and counter for uniqueness
+            # A more robust approach would involve hashing content or using stable identifiers.
+            global_id = f"placeholder_{result.analyzer_name}_{os.path.basename(result.file_path)}_{node.local_id}_{node_counter}"
+            node_counter += 1
+            map_key = (result.analyzer_name, result.file_path, node.local_id)
+            local_to_global_id_map[map_key] = global_id
+
+            # Placeholder type mapping (use original type for now)
+            # Future: Implement mapping rules (e.g., "FunctionDefinitionHint" -> "FunctionDefinition")
+            final_node_type = node.node_type
+
+            # Add language and original analyzer as properties
+            props = dict(node.properties) if node.properties else {}
+            props["language"] = result.analyzer_name # Store which language analyzer found it
+            props["analyzer"] = result.analyzer_name
+            props["original_node_type"] = node.node_type # Keep original type for reference
+            props["original_file_path"] = result.file_path # Store original file path
+
+            unified_nodes.append(neo4j_ingestion_pb2.GraphNode(
+                global_id=global_id,
+                node_type=final_node_type, # Use placeholder resolved type
+                properties=props,
+                location=node.location,
+                code_snippet=node.code_snippet
+                # secondary_labels could be added based on node_type mapping later
+            ))
+
+    logger.info(f"Orchestration - Node pass complete. {len(unified_nodes)} unified nodes created. ID map size: {len(local_to_global_id_map)}")
+
+    # --- Second Pass: Create Relationships using Mapped Global IDs ---
+    rel_counter = 0
+    skipped_rels = 0
+    for result in analysis_results:
+        if not result or result.status != "SUCCESS":
+            continue # Skip failed analyses again
+
+        logger.debug(f"Orchestrating relationships from {result.analyzer_name} for {result.file_path} ({len(result.relationships)} relationships)")
+        for rel in result.relationships:
+            source_key = (result.analyzer_name, result.file_path, rel.source_node_local_id)
+            target_key = (result.analyzer_name, result.file_path, rel.target_node_local_id)
+
+            # Check if both source and target nodes were successfully mapped
+            if source_key in local_to_global_id_map and target_key in local_to_global_id_map:
+                source_global_id = local_to_global_id_map[source_key]
+                target_global_id = local_to_global_id_map[target_key]
+
+                # Placeholder relationship type mapping (use original type for now)
+                # Future: Implement mapping rules (e.g., "CALLS_HINT" -> "CALLS")
+                final_rel_type = rel.relationship_type
+
+                # Add analyzer info to relationship properties
+                rel_props = dict(rel.properties) if rel.properties else {}
+                rel_props["analyzer"] = result.analyzer_name
+                rel_props["original_relationship_type"] = rel.relationship_type
+
+                unified_relationships.append(neo4j_ingestion_pb2.GraphRelationship(
+                    source_node_global_id=source_global_id,
+                    target_node_global_id=target_global_id,
+                    relationship_type=final_rel_type, # Use placeholder resolved type
+                    properties=rel_props,
+                    location=rel.location
+                ))
+                rel_counter += 1
+            else:
+                skipped_rels += 1
+                # Log only if source or target ID was expected but not found
+                if source_key not in local_to_global_id_map:
+                     logger.warning(f"Relationship source node ID not found in map for {result.file_path}: Key={source_key}")
+                if target_key not in local_to_global_id_map:
+                     logger.warning(f"Relationship target node ID not found in map for {result.file_path}: Key={target_key}")
+
+    logger.info(f"Orchestration - Relationship pass complete. {rel_counter} unified relationships created. {skipped_rels} skipped due to missing node mappings.")
+    return unified_nodes, unified_relationships
+
+# --- Helper Function for Ingestion ---
+async def ingest_graph_data(nodes: List[neo4j_ingestion_pb2.GraphNode], relationships: List[neo4j_ingestion_pb2.GraphRelationship]) -> Optional[neo4j_ingestion_pb2.IngestGraphResponse]:
+    """Sends the unified graph data to the Neo4j Ingestion service."""
+    if not nodes and not relationships:
+        logger.info("No nodes or relationships to ingest.")
+        # Return a synthetic success response indicating nothing was done
+        return neo4j_ingestion_pb2.IngestGraphResponse(success=True, nodes_processed=0, relationships_processed=0)
+
+    batch_id = str(uuid.uuid4())
+    logger.info(f"Preparing ingestion request batch ID: {batch_id} ({len(nodes)} nodes, {len(relationships)} relationships)")
+
+    ingestion_request = neo4j_ingestion_pb2.IngestGraphRequest(
+        batch_id=batch_id,
+        nodes=nodes,
+        relationships=relationships,
+        full_update=False # Assuming incremental updates for now
+    )
+
+    try:
+        async with grpc.aio.insecure_channel(NEO4J_INGESTION_ADDR) as channel:
+            stub = neo4j_ingestion_pb2_grpc.Neo4jIngestionServiceStub(channel)
+            logger.info(f"Connecting to Neo4j Ingestion service at {NEO4J_INGESTION_ADDR}...")
+            # Increased timeout for potentially large ingestion batches
+            response = await stub.IngestGraph(ingestion_request, timeout=180.0)
+            logger.info(f"Received response from Neo4j Ingestion: Success={response.success}, Nodes={response.nodes_processed}, Rels={response.relationships_processed}, Msg={response.error_message}")
+            return response
+    except grpc.aio.AioRpcError as e:
+        logger.error(f"gRPC call to Neo4j Ingestion service failed: {e.details()} (Code: {e.code()})")
+        return None # Indicate gRPC communication failure
+    except Exception as e:
+        logger.exception("Unexpected error during Neo4j ingestion call.")
+        return None # Indicate unexpected failure
+
 # --- Endpoint for Local Directory Analysis ---
-@app.post("/analyze-local", summary="Trigger Analysis for a Local Directory")
+@app.post("/analyze-local", summary="Trigger Analysis, Orchestration, and Ingestion for a Local Directory")
 async def trigger_local_analysis(request: LocalAnalysisRequest = Body(...)):
     """
-    Receives a local directory path (accessible within the container),
-    scans for supported files, and dispatches analysis requests to
-    appropriate language analyzer services via gRPC.
+    Receives a local directory path, scans for supported files, dispatches
+    analysis requests concurrently, orchestrates the results, and ingests
+    the unified graph into Neo4j.
     """
     logger.info(f"Received local analysis request for directory: {request.directory_path}")
 
@@ -475,72 +635,148 @@ async def trigger_local_analysis(request: LocalAnalysisRequest = Body(...)):
                 files_to_process.append((language, full_path))
 
     logger.info(f"Found {len(files_to_process)} supported files to analyze.")
+    if not files_to_process:
+        return {"message": "No supported files found in the specified directory.", "analysis_summary": {"files_scanned": 0}, "orchestration_summary": {}, "ingestion_summary": {}}
 
-    # --- Dispatch Analysis Requests (Asynchronously) ---
-    # Note: This dispatches sequentially for simplicity. Consider asyncio.gather for parallelism.
-    dispatch_success_count = 0
-    dispatch_error_count = 0
-    dispatch_errors = []
-
+    # --- Dispatch Analysis Requests (Concurrently) ---
+    tasks = []
+    files_skipped_reading = []
     for language, file_path in files_to_process:
-        logger.debug(f"Processing file: {file_path} (Language: {language})")
         target_address = analyzer_service_addresses.get(language)
-
         if not target_address:
             logger.warning(f"No analyzer service configured for language '{language}'. Skipping file: {file_path}")
-            dispatch_error_count += 1
-            dispatch_errors.append(f"No service for {language} ({file_path})")
+            # Record skipped file due to missing service configuration
+            files_skipped_reading.append({"file": file_path, "reason": f"No analyzer service configured for {language}"})
             continue
-
         try:
-            # Read file content
+            # Read file content synchronously for now. Consider aiofiles for async read if needed.
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 file_content = f.read()
-
-            # Create gRPC client and request
-            async with grpc.aio.insecure_channel(target_address) as channel:
-                 # Use the generic AnalyzerService stub
-                stub = analyzer_pb2_grpc.AnalyzerServiceStub(channel)
-                grpc_request = analyzer_pb2.AnalyzeCodeRequest(
-                    file_path=file_path, # Send absolute path within container
-                    file_content=file_content,
-                    language=language
-                )
-
-                logger.info(f"Calling AnalyzeCode RPC on {target_address} for {file_path}")
-                response = await stub.AnalyzeCode(grpc_request, timeout=60.0) # Add timeout
-
-                if response.status == "SUCCESS" or response.status == "DISPATCHED": # Adjust based on analyzer response design
-                    logger.info(f"Successfully dispatched analysis for {file_path} to {target_address}. Response: {response.message}")
-                    dispatch_success_count += 1
-                else:
-                    logger.error(f"Analyzer service for {language} at {target_address} failed for {file_path}: {response.message}")
-                    dispatch_error_count += 1
-                    dispatch_errors.append(f"{language} analyzer error ({file_path}): {response.message}")
-
-        except grpc.aio.AioRpcError as e:
-            logger.error(f"gRPC call to {target_address} for {file_path} failed: {e.details()} (Code: {e.code()})")
-            dispatch_error_count += 1
-            dispatch_errors.append(f"gRPC error calling {language} analyzer ({file_path}): {e.details()}")
+            # Create a task for the dispatch_analysis coroutine
+            tasks.append(dispatch_analysis(language, file_path, file_content, target_address))
         except FileNotFoundError:
-             logger.error(f"File not found during read: {file_path}. Skipping.")
-             dispatch_error_count += 1
-             dispatch_errors.append(f"File not found: {file_path}")
+            logger.error(f"File not found during read: {file_path}. Skipping analysis.")
+            files_skipped_reading.append({"file": file_path, "reason": "File not found during read"})
         except Exception as e:
-            logger.exception(f"Unexpected error processing file {file_path}")
-            dispatch_error_count += 1
-            dispatch_errors.append(f"Unexpected error for {file_path}: {str(e)}")
+            logger.exception(f"Unexpected error reading file {file_path}. Skipping analysis.")
+            files_skipped_reading.append({"file": file_path, "reason": f"Unexpected read error: {str(e)}"})
+
+    logger.info(f"Dispatching {len(tasks)} analysis tasks concurrently...")
+    # Use asyncio.gather to run tasks concurrently. return_exceptions=True ensures all tasks complete.
+    analysis_results_or_exceptions: List[Optional[analyzer_pb2.AnalysisResult] | BaseException] = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Process results, separating successful AnalysisResult objects from exceptions/None
+    successful_results: List[analyzer_pb2.AnalysisResult] = []
+    failed_tasks_details: List[Dict[str, Any]] = []
+
+    for i, res_or_exc in enumerate(analysis_results_or_exceptions):
+        original_language, original_file_path = files_to_process[i] # Get corresponding file info
+        if isinstance(res_or_exc, analyzer_pb2.AnalysisResult):
+            if res_or_exc.status == "SUCCESS":
+                successful_results.append(res_or_exc)
+            else:
+                # Analyzer returned a non-SUCCESS status
+                failed_tasks_details.append({
+                    "file": original_file_path,
+                    "language": original_language,
+                    "reason": f"Analyzer returned status '{res_or_exc.status}'",
+                    "details": res_or_exc.error_message
+                })
+        elif isinstance(res_or_exc, BaseException):
+            # asyncio.gather caught an exception from dispatch_analysis
+            failed_tasks_details.append({
+                "file": original_file_path,
+                "language": original_language,
+                "reason": "Exception during dispatch/analysis",
+                "details": str(res_or_exc)
+            })
+        elif res_or_exc is None:
+             # dispatch_analysis returned None (likely gRPC error)
+             failed_tasks_details.append({
+                "file": original_file_path,
+                "language": original_language,
+                "reason": "gRPC call failed or unexpected error in dispatch",
+                "details": "Check logs for specific gRPC error"
+             })
+        else:
+            # Should not happen, but catch unexpected return types
+            failed_tasks_details.append({
+                "file": original_file_path,
+                "language": original_language,
+                "reason": "Unexpected result type from dispatch",
+                "details": str(type(res_or_exc))
+            })
+
+    logger.info(f"Received {len(successful_results)} successful analysis results.")
+    if failed_tasks_details:
+        logger.warning(f"{len(failed_tasks_details)} analysis tasks failed or returned errors.")
+        # Log details for debugging
+        for failure in failed_tasks_details:
+             logger.debug(f"Analysis Failure: File={failure['file']}, Reason={failure['reason']}, Details={failure.get('details', 'N/A')}")
+
+    # --- Orchestration Phase ---
+    logger.info("Starting orchestration phase...")
+    # Pass only the successful results to the orchestrator
+    unified_nodes, unified_relationships = orchestrate_results(successful_results)
+    logger.info(f"Orchestration complete: {len(unified_nodes)} nodes, {len(unified_relationships)} relationships generated.")
+
+    # --- Ingestion Phase ---
+    ingestion_response = None
+    ingestion_status = "Skipped"
+    ingestion_details = {"nodes_processed": 0, "relationships_processed": 0, "error": None}
+
+    if unified_nodes or unified_relationships:
+        logger.info("Starting ingestion phase...")
+        ingestion_response_or_none = await ingest_graph_data(unified_nodes, unified_relationships)
+        if ingestion_response_or_none:
+            ingestion_response = ingestion_response_or_none # Keep the actual response object
+            if ingestion_response.success:
+                ingestion_status = "Success"
+                ingestion_details["nodes_processed"] = ingestion_response.nodes_processed
+                ingestion_details["relationships_processed"] = ingestion_response.relationships_processed
+                logger.info(f"Ingestion successful: {ingestion_response.nodes_processed} nodes, {ingestion_response.relationships_processed} relationships processed.")
+            else:
+                ingestion_status = "Failed"
+                ingestion_details["error"] = ingestion_response.error_message
+                logger.error(f"Ingestion failed: {ingestion_response.error_message}")
+        else:
+            # ingest_graph_data returned None (gRPC error or unexpected exception)
+            ingestion_status = "Failed"
+            ingestion_details["error"] = "Ingestion service call failed or unexpected error occurred."
+            logger.error(f"Ingestion failed: {ingestion_details['error']}")
+    else:
+        logger.info("Skipping ingestion phase: No unified nodes or relationships generated.")
 
     # --- Return Summary ---
-    summary_message = f"Analysis dispatch summary: {dispatch_success_count} succeeded, {dispatch_error_count} failed."
-    logger.info(summary_message)
+    final_message = f"Local analysis process completed. Status: Analysis({len(successful_results)}/{len(tasks)} successful), Orchestration({len(unified_nodes)} nodes, {len(unified_relationships)} relationships), Ingestion({ingestion_status})."
+    logger.info(final_message)
 
-    if dispatch_error_count > 0:
-         # Return a partial success status if some dispatches failed
-         # Consider returning 500 if a critical number failed
-         return {"message": summary_message, "errors": dispatch_errors}
-    else:
-        return {"message": summary_message}
+    # Combine all errors/skipped files for reporting
+    all_errors = files_skipped_reading + failed_tasks_details
+    if ingestion_status == "Failed" and ingestion_details["error"]:
+         all_errors.append({"service": "ingestion", "reason": ingestion_details["error"]})
+
+    # Use status code 200 but indicate issues in the response body
+    return {
+        "message": final_message,
+        "analysis_summary": {
+            "files_scanned": len(files_to_process),
+            "tasks_dispatched": len(tasks),
+            "successful_analyses": len(successful_results),
+            "failed_or_skipped_analyses": len(all_errors) - (1 if ingestion_status == "Failed" else 0), # Adjust count based on ingestion error
+        },
+        "orchestration_summary": {
+            "unified_nodes_generated": len(unified_nodes),
+            "unified_relationships_generated": len(unified_relationships),
+        },
+        "ingestion_summary": {
+            "status": ingestion_status,
+            "nodes_processed": ingestion_details["nodes_processed"],
+            "relationships_processed": ingestion_details["relationships_processed"],
+            "error": ingestion_details["error"]
+        },
+        "errors_and_skipped_files": all_errors # Provide detailed list of issues
+    }
 
 @app.get("/health", summary="Health Check")
 async def health_check():

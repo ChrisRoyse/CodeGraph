@@ -2,23 +2,84 @@ syntax = "proto3";
 
 package analyzer;
 
-// The request message containing the code to analyze
-message AnalyzeCodeRequest {
-  string file_path = 1; // Optional: Path of the file being analyzed
-  string file_content = 2; // The source code content
-  string language = 3; // The language identifier (e.g., "sql", "python")
+// Represents a location within a source code file.
+message CodeLocation {
+  string file_path = 1;       // Path of the file relative to the repository root.
+  int32 start_line = 2;       // Starting line number (1-based).
+  int32 start_column = 3;     // Starting column number (0-based).
+  int32 end_line = 4;         // Ending line number (1-based).
+  int32 end_column = 5;       // Ending column number (0-based).
 }
 
-// The response message confirming dispatch or containing basic results/status
-// Note: In the full architecture, the analyzer sends detailed results
-// directly to the ingestion service. This response is primarily for confirmation.
-message AnalyzeCodeResponse {
-  string status = 1; // e.g., "DISPATCHED", "ERROR"
-  string message = 2; // Optional details or error message
+// Represents a node identified by an analyzer.
+// This could be a code construct (function, class) or an external entity hint (URL, table name).
+message Node {
+  // Temporary ID unique within this AnalysisResult message.
+  // Used for linking relationships within this result before global correlation.
+  int32 local_id = 1;
+
+  // A candidate string for generating a unique global ID.
+  // The orchestrator will use this (potentially combined with other info)
+  // to create the final stable globalId.
+  // Example: "src/api/user.py:UserService:create_user" or "http://example.com/api/users"
+  string global_id_candidate = 2;
+
+  // Type of the node (e.g., "FunctionDefinition", "ClassDefinition", "ApiEndpointHint", "DatabaseTableHint").
+  // Analyzers provide hints; the orchestrator resolves final types like :ApiEndpoint, :DatabaseTable.
+  string node_type = 3;
+
+  // Key-value properties associated with the node.
+  // Examples: {"name": "create_user", "signature": "(data)", "url": "/users", "table_name": "users"}
+  map<string, string> properties = 4;
+
+  // Location of the node definition in the source code.
+  CodeLocation location = 5;
+
+  // The relevant code snippet for this node.
+  string code_snippet = 6;
+}
+
+// Represents a relationship identified by an analyzer between two nodes within the same AnalysisResult.
+message Relationship {
+  // local_id of the source node within this AnalysisResult.
+  int32 source_node_local_id = 1;
+
+  // local_id of the target node within this AnalysisResult.
+  int32 target_node_local_id = 2;
+
+  // Type of the relationship (e.g., "CALLS", "REFERENCES", "DEFINES", "QUERIES_HINT", "FETCHES_HINT").
+  // Analyzers provide hints; the orchestrator resolves final types like :CALLS_API, :QUERIES_TABLE.
+  string relationship_type = 3;
+
+  // Key-value properties associated with the relationship.
+  map<string, string> properties = 4;
+
+  // Location where the relationship is observed in the source code.
+  CodeLocation location = 5;
+}
+
+// The result produced by a single language analyzer for a given file.
+message AnalysisResult {
+  string analyzer_name = 1;   // Identifier for the analyzer (e.g., "python_analyzer", "sql_analyzer").
+  string file_path = 2;       // Path of the file analyzed.
+  repeated Node nodes = 3;          // List of nodes found in the file.
+  repeated Relationship relationships = 4; // List of relationships found in the file.
+  string status = 5;          // e.g., "SUCCESS", "PARTIAL_SUCCESS", "ERROR"
+  string error_message = 6;   // Optional error details if status is not SUCCESS.
+}
+
+
+// The request message containing the code to analyze
+message AnalyzeCodeRequest {
+  string file_path = 1; // Path of the file being analyzed relative to repo root
+  string file_content = 2; // The source code content
+  string language = 3; // The language identifier (e.g., "sql", "python")
+  // Optional: Contextual information that might help analysis (e.g., project dependencies)
+  map<string, string> context = 4;
 }
 
 // The service definition for language analyzers
 service AnalyzerService {
-  // Analyzes the provided code
-  rpc AnalyzeCode (AnalyzeCodeRequest) returns (AnalyzeCodeResponse);
+  // Analyzes the provided code and returns intermediate nodes and relationships.
+  rpc AnalyzeCode (AnalyzeCodeRequest) returns (AnalysisResult);
 }

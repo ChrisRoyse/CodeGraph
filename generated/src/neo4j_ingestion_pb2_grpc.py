@@ -25,8 +25,8 @@ if _version_not_supported:
     )
 
 
-class Neo4jIngestionStub(object):
-    """Service to ingest CPG data into Neo4j
+class Neo4jIngestionServiceStub(object):
+    """Service definition for the Neo4j Ingestion Service.
     """
 
     def __init__(self, channel):
@@ -35,46 +35,47 @@ class Neo4jIngestionStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.IngestCpg = channel.unary_unary(
-                '/neo4j_ingestion.Neo4jIngestion/IngestCpg',
-                request_serializer=neo4j__ingestion__pb2.IngestCpgRequest.SerializeToString,
-                response_deserializer=neo4j__ingestion__pb2.IngestCpgResponse.FromString,
+        self.IngestGraph = channel.unary_unary(
+                '/neo4j_ingestion.Neo4jIngestionService/IngestGraph',
+                request_serializer=neo4j__ingestion__pb2.IngestGraphRequest.SerializeToString,
+                response_deserializer=neo4j__ingestion__pb2.IngestGraphResponse.FromString,
                 _registered_method=True)
 
 
-class Neo4jIngestionServicer(object):
-    """Service to ingest CPG data into Neo4j
+class Neo4jIngestionServiceServicer(object):
+    """Service definition for the Neo4j Ingestion Service.
     """
 
-    def IngestCpg(self, request, context):
-        """Ingests filtered CPG data and handles deletions for incremental updates
+    def IngestGraph(self, request, context):
+        """Accepts a batch of nodes and relationships and ingests them into the Neo4j database.
+        This operation should be idempotent, typically using MERGE operations based on global_id.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
 
-def add_Neo4jIngestionServicer_to_server(servicer, server):
+def add_Neo4jIngestionServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'IngestCpg': grpc.unary_unary_rpc_method_handler(
-                    servicer.IngestCpg,
-                    request_deserializer=neo4j__ingestion__pb2.IngestCpgRequest.FromString,
-                    response_serializer=neo4j__ingestion__pb2.IngestCpgResponse.SerializeToString,
+            'IngestGraph': grpc.unary_unary_rpc_method_handler(
+                    servicer.IngestGraph,
+                    request_deserializer=neo4j__ingestion__pb2.IngestGraphRequest.FromString,
+                    response_serializer=neo4j__ingestion__pb2.IngestGraphResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'neo4j_ingestion.Neo4jIngestion', rpc_method_handlers)
+            'neo4j_ingestion.Neo4jIngestionService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('neo4j_ingestion.Neo4jIngestion', rpc_method_handlers)
+    server.add_registered_method_handlers('neo4j_ingestion.Neo4jIngestionService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class Neo4jIngestion(object):
-    """Service to ingest CPG data into Neo4j
+class Neo4jIngestionService(object):
+    """Service definition for the Neo4j Ingestion Service.
     """
 
     @staticmethod
-    def IngestCpg(request,
+    def IngestGraph(request,
             target,
             options=(),
             channel_credentials=None,
@@ -87,9 +88,9 @@ class Neo4jIngestion(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/neo4j_ingestion.Neo4jIngestion/IngestCpg',
-            neo4j__ingestion__pb2.IngestCpgRequest.SerializeToString,
-            neo4j__ingestion__pb2.IngestCpgResponse.FromString,
+            '/neo4j_ingestion.Neo4jIngestionService/IngestGraph',
+            neo4j__ingestion__pb2.IngestGraphRequest.SerializeToString,
+            neo4j__ingestion__pb2.IngestGraphResponse.FromString,
             options,
             channel_credentials,
             insecure,

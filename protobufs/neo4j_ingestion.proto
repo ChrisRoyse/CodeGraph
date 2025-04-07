@@ -2,52 +2,101 @@ syntax = "proto3";
 
 package neo4j_ingestion;
 
-// Import struct for generic properties
-import "google/protobuf/struct.proto";
-
-// Service to ingest CPG data into Neo4j
-service Neo4jIngestion {
-  // Ingests filtered CPG data and handles deletions for incremental updates
-  rpc IngestCpg (IngestCpgRequest) returns (IngestCpgResponse);
+// Represents a location within a source code file.
+// Copied from analyzer.proto for self-containment.
+message CodeLocation {
+  string file_path = 1;       // Path of the file relative to the repository root.
+  int32 start_line = 2;       // Starting line number (1-based).
+  int32 start_column = 3;     // Starting column number (0-based).
+  int32 end_line = 4;         // Ending line number (1-based).
+  int32 end_column = 5;       // Ending column number (0-based).
 }
 
-// Represents a node in the filtered CPG (mirrors definition in joern_analysis.proto)
-message FilteredNode {
-  string entity_id = 1; // Unique identifier for the node
-  string filepath = 2; // Filepath the node belongs to
-  google.protobuf.Struct properties = 3; // Node properties (flexible structure)
+// Represents a node in the unified graph structure, ready for ingestion.
+message GraphNode {
+  // Globally unique and stable identifier for the node, resolved by the orchestrator.
+  // Used as the primary key for MERGE operations in Neo4j.
+  // Example: "python:src/api/user.py:UserService:create_user", "http://example.com/api/users"
+  string global_id = 1;
+
+  // The finalized primary type (label) of the node determined by the orchestrator.
+  // Examples: "FunctionDefinition", "ClassDefinition", "ApiEndpoint", "DatabaseTable", "File"
+  // The ingestion service will typically use this as the primary Neo4j label (e.g., :FunctionDefinition).
+  string node_type = 2;
+
+  // Additional labels for the node, if any.
+  // Example: ["Code", "ApiRelated"]
+  repeated string secondary_labels = 3;
+
+  // Key-value properties associated with the node.
+  // These will become properties on the Neo4j node.
+  // Examples: {"name": "create_user", "signature": "(data)", "url": "/users", "table_name": "users", "language": "python"}
+  map<string, string> properties = 4;
+
+  // Original location of the node definition in the source code, if applicable.
+  CodeLocation location = 5;
+
+  // The relevant code snippet for this node, if applicable.
+  string code_snippet = 6;
 }
 
-// Represents a relationship in the filtered CPG (mirrors definition in joern_analysis.proto)
-message FilteredRelationship {
-  string entity_id = 1; // Unique identifier for the relationship
-  string start_node_id = 2; // ID of the start node
-  string end_node_id = 3; // ID of the end node
-  string type = 4; // Type of the relationship
-  google.protobuf.Struct properties = 5; // Relationship properties (flexible structure)
+// Represents a relationship in the unified graph structure, ready for ingestion.
+message GraphRelationship {
+  // global_id of the source node for the relationship.
+  string source_node_global_id = 1;
+
+  // global_id of the target node for the relationship.
+  string target_node_global_id = 2;
+
+  // The finalized type of the relationship determined by the orchestrator.
+  // This will become the Neo4j relationship type.
+  // Examples: "CALLS", "REFERENCES", "DEFINES", "CONTAINS", "CALLS_API", "QUERIES_TABLE", "WRITES_TO_TABLE"
+  string relationship_type = 3;
+
+  // Key-value properties associated with the relationship.
+  // These will become properties on the Neo4j relationship.
+  map<string, string> properties = 4;
+
+  // Location where the relationship is observed in the source code, if applicable.
+  CodeLocation location = 5;
 }
 
-// Request message for IngestCpg RPC for incremental updates
-message IngestCpgRequest {
-  repeated FilteredNode filtered_nodes = 1; // List of nodes relevant to changed files
-  repeated FilteredRelationship filtered_relationships = 2; // List of relationships relevant to changed files
-  repeated string deleted_files = 3; // List of deleted file paths
-  // string graph_id = 4; // Optional: Identifier for the graph instance in Neo4j
+// Request message for the IngestGraph RPC.
+// Contains the unified graph data (nodes and relationships) to be ingested into Neo4j.
+message IngestGraphRequest {
+  // A unique identifier for this ingestion batch, useful for tracking/logging.
+  string batch_id = 1;
+
+  // List of nodes to be created or merged in Neo4j.
+  repeated GraphNode nodes = 2;
+
+  // List of relationships to be created or merged in Neo4j.
+  repeated GraphRelationship relationships = 3;
+
+  // Optional: Flag to indicate if this is a complete graph update or an incremental one.
+  // If true, the ingestion service might perform cleanup of old nodes/relationships
+  // not present in this batch (requires careful implementation). Defaults to false (incremental).
+  bool full_update = 4;
 }
 
-// Response message for IngestCpg RPC
-message IngestCpgResponse {
-  Status status = 1; // Status of the ingestion operation
-  string message = 2; // Optional message (e.g., error details, success confirmation)
-  // int32 nodes_processed = 3; // Optional: Count of nodes processed (merged/updated)
-  // int32 relationships_processed = 4; // Optional: Count of relationships processed (merged/updated)
-  // int32 nodes_deleted = 5; // Optional: Count of nodes deleted
+// Response message for the IngestGraph RPC.
+message IngestGraphResponse {
+  // Indicates whether the ingestion was successful.
+  bool success = 1;
+
+  // Number of nodes processed/ingested.
+  int32 nodes_processed = 2;
+
+  // Number of relationships processed/ingested.
+  int32 relationships_processed = 3;
+
+  // Optional error message if success is false.
+  string error_message = 4;
 }
 
-// Enum for operation status (redefined for simplicity, ideally imported)
-enum Status {
-  UNKNOWN = 0;
-  SUCCESS = 1;
-  FAILURE = 2;
-  IN_PROGRESS = 3;
+// Service definition for the Neo4j Ingestion Service.
+service Neo4jIngestionService {
+  // Accepts a batch of nodes and relationships and ingests them into the Neo4j database.
+  // This operation should be idempotent, typically using MERGE operations based on global_id.
+  rpc IngestGraph (IngestGraphRequest) returns (IngestGraphResponse);
 }

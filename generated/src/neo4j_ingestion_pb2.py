@@ -22,26 +22,33 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15neo4j_ingestion.proto\x12\x0fneo4j_ingestion\x1a\x1cgoogle/protobuf/struct.proto\"`\n\x0c\x46ilteredNode\x12\x11\n\tentity_id\x18\x01 \x01(\t\x12\x10\n\x08\x66ilepath\x18\x02 \x01(\t\x12+\n\nproperties\x18\x03 \x01(\x0b\x32\x17.google.protobuf.Struct\"\x90\x01\n\x14\x46ilteredRelationship\x12\x11\n\tentity_id\x18\x01 \x01(\t\x12\x15\n\rstart_node_id\x18\x02 \x01(\t\x12\x13\n\x0b\x65nd_node_id\x18\x03 \x01(\t\x12\x0c\n\x04type\x18\x04 \x01(\t\x12+\n\nproperties\x18\x05 \x01(\x0b\x32\x17.google.protobuf.Struct\"\xa7\x01\n\x10IngestCpgRequest\x12\x35\n\x0e\x66iltered_nodes\x18\x01 \x03(\x0b\x32\x1d.neo4j_ingestion.FilteredNode\x12\x45\n\x16\x66iltered_relationships\x18\x02 \x03(\x0b\x32%.neo4j_ingestion.FilteredRelationship\x12\x15\n\rdeleted_files\x18\x03 \x03(\t\"M\n\x11IngestCpgResponse\x12\'\n\x06status\x18\x01 \x01(\x0e\x32\x17.neo4j_ingestion.Status\x12\x0f\n\x07message\x18\x02 \x01(\t*@\n\x06Status\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x0b\n\x07SUCCESS\x10\x01\x12\x0b\n\x07\x46\x41ILURE\x10\x02\x12\x0f\n\x0bIN_PROGRESS\x10\x03\x32\x64\n\x0eNeo4jIngestion\x12R\n\tIngestCpg\x12!.neo4j_ingestion.IngestCpgRequest\x1a\".neo4j_ingestion.IngestCpgResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15neo4j_ingestion.proto\x12\x0fneo4j_ingestion\"q\n\x0c\x43odeLocation\x12\x11\n\tfile_path\x18\x01 \x01(\t\x12\x12\n\nstart_line\x18\x02 \x01(\x05\x12\x14\n\x0cstart_column\x18\x03 \x01(\x05\x12\x10\n\x08\x65nd_line\x18\x04 \x01(\x05\x12\x12\n\nend_column\x18\x05 \x01(\x05\"\x85\x02\n\tGraphNode\x12\x11\n\tglobal_id\x18\x01 \x01(\t\x12\x11\n\tnode_type\x18\x02 \x01(\t\x12\x18\n\x10secondary_labels\x18\x03 \x03(\t\x12>\n\nproperties\x18\x04 \x03(\x0b\x32*.neo4j_ingestion.GraphNode.PropertiesEntry\x12/\n\x08location\x18\x05 \x01(\x0b\x32\x1d.neo4j_ingestion.CodeLocation\x12\x14\n\x0c\x63ode_snippet\x18\x06 \x01(\t\x1a\x31\n\x0fPropertiesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x98\x02\n\x11GraphRelationship\x12\x1d\n\x15source_node_global_id\x18\x01 \x01(\t\x12\x1d\n\x15target_node_global_id\x18\x02 \x01(\t\x12\x19\n\x11relationship_type\x18\x03 \x01(\t\x12\x46\n\nproperties\x18\x04 \x03(\x0b\x32\x32.neo4j_ingestion.GraphRelationship.PropertiesEntry\x12/\n\x08location\x18\x05 \x01(\x0b\x32\x1d.neo4j_ingestion.CodeLocation\x1a\x31\n\x0fPropertiesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xa1\x01\n\x12IngestGraphRequest\x12\x10\n\x08\x62\x61tch_id\x18\x01 \x01(\t\x12)\n\x05nodes\x18\x02 \x03(\x0b\x32\x1a.neo4j_ingestion.GraphNode\x12\x39\n\rrelationships\x18\x03 \x03(\x0b\x32\".neo4j_ingestion.GraphRelationship\x12\x13\n\x0b\x66ull_update\x18\x04 \x01(\x08\"w\n\x13IngestGraphResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x17\n\x0fnodes_processed\x18\x02 \x01(\x05\x12\x1f\n\x17relationships_processed\x18\x03 \x01(\x05\x12\x15\n\rerror_message\x18\x04 \x01(\t2q\n\x15Neo4jIngestionService\x12X\n\x0bIngestGraph\x12#.neo4j_ingestion.IngestGraphRequest\x1a$.neo4j_ingestion.IngestGraphResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'neo4j_ingestion_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_STATUS']._serialized_start=566
-  _globals['_STATUS']._serialized_end=630
-  _globals['_FILTEREDNODE']._serialized_start=72
-  _globals['_FILTEREDNODE']._serialized_end=168
-  _globals['_FILTEREDRELATIONSHIP']._serialized_start=171
-  _globals['_FILTEREDRELATIONSHIP']._serialized_end=315
-  _globals['_INGESTCPGREQUEST']._serialized_start=318
-  _globals['_INGESTCPGREQUEST']._serialized_end=485
-  _globals['_INGESTCPGRESPONSE']._serialized_start=487
-  _globals['_INGESTCPGRESPONSE']._serialized_end=564
-  _globals['_NEO4JINGESTION']._serialized_start=632
-  _globals['_NEO4JINGESTION']._serialized_end=732
+  _globals['_GRAPHNODE_PROPERTIESENTRY']._loaded_options = None
+  _globals['_GRAPHNODE_PROPERTIESENTRY']._serialized_options = b'8\001'
+  _globals['_GRAPHRELATIONSHIP_PROPERTIESENTRY']._loaded_options = None
+  _globals['_GRAPHRELATIONSHIP_PROPERTIESENTRY']._serialized_options = b'8\001'
+  _globals['_CODELOCATION']._serialized_start=42
+  _globals['_CODELOCATION']._serialized_end=155
+  _globals['_GRAPHNODE']._serialized_start=158
+  _globals['_GRAPHNODE']._serialized_end=419
+  _globals['_GRAPHNODE_PROPERTIESENTRY']._serialized_start=370
+  _globals['_GRAPHNODE_PROPERTIESENTRY']._serialized_end=419
+  _globals['_GRAPHRELATIONSHIP']._serialized_start=422
+  _globals['_GRAPHRELATIONSHIP']._serialized_end=702
+  _globals['_GRAPHRELATIONSHIP_PROPERTIESENTRY']._serialized_start=370
+  _globals['_GRAPHRELATIONSHIP_PROPERTIESENTRY']._serialized_end=419
+  _globals['_INGESTGRAPHREQUEST']._serialized_start=705
+  _globals['_INGESTGRAPHREQUEST']._serialized_end=866
+  _globals['_INGESTGRAPHRESPONSE']._serialized_start=868
+  _globals['_INGESTGRAPHRESPONSE']._serialized_end=987
+  _globals['_NEO4JINGESTIONSERVICE']._serialized_start=989
+  _globals['_NEO4JINGESTIONSERVICE']._serialized_end=1102
 # @@protoc_insertion_point(module_scope)
