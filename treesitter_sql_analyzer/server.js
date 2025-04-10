@@ -5,9 +5,13 @@ const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
 const Parser = require('tree-sitter');
 const SQL = require('@derekstride/tree-sitter-sql');
+const { analyze } = require('./analyzer'); // Import the core analyzer logic
+const { sha256 } = require('./id_generator'); // Import hashing function
+const { sendAnalysisData } = require('./api_client'); // Import API client function
 
-// Define the path to the common analyzer proto file relative to this script's location
-const PROTO_PATH = path.join(__dirname, './protobufs/analyzer.proto'); // Correct path inside container relative to /app
+// Define the path to the common analyzer proto file
+// Using absolute path to ensure reliability in container environment
+const PROTO_PATH = '/app/protobufs/analyzer.proto'; // Absolute path inside container
 const GRPC_PORT = process.env.GRPC_PORT || '50054'; // Default port if not set
 
 console.log(`Loading proto definition from: ${PROTO_PATH}`);
@@ -41,10 +45,13 @@ try {
  * @param {Object} call - The gRPC call object containing the request.
  * @param {function} callback - The callback function to send the response.
  */
-function analyzeCode(call, callback) {
-  const fileContent = call.request.file_content;
+async function analyzeCode(call, callback) { // Make async
+  const sourceCode = call.request.file_content; // Revert to file_content
   const filePath = call.request.file_path;
   const language = call.request.language; // Should be 'sql'
+
+  console.log(`[SQL Analyzer] Received file_content type: ${typeof sourceCode}, length: ${sourceCode?.length ?? 'N/A'}`); // Update log message
+  // console.log(`[SQL Analyzer] Received code snippet: ${sourceCode?.substring(0, 100)}`);
 
   console.log(`Received request to analyze ${language} code (path: ${filePath || 'N/A'})`);
 
@@ -56,35 +63,54 @@ function analyzeCode(call, callback) {
       });
   }
 
-  if (typeof fileContent !== 'string') {
-      console.error('Error: Missing or invalid fileContent');
+  if (typeof sourceCode !== 'string') {
+      console.error('[SQL Analyzer] Error: Missing or invalid file_content'); // Update log message
       return callback({
           code: grpc.status.INVALID_ARGUMENT,
-          details: 'Missing or invalid file_content in request.'
+          details: 'Missing or invalid file_content in request.' // Update error detail
       });
   }
 
+  // fileId is no longer needed as we send data via API
   try {
-    // Parse the SQL code using tree-sitter
-    console.log('Parsing SQL content...');
-    const tree = parser.parse(fileContent);
-    console.log('Parsing complete.');
+    // Removed duplicate fileId declaration
+    // 1. Calculate code hash
+    const codeHash = sha256(sourceCode);
+    console.log(`[SQL Analyzer] Code hash for ${filePath}: ${codeHash.substring(0, 10)}...`);
 
-    // Placeholder: Return the S-expression of the root node
-    const analysisResult = tree.rootNode ? tree.rootNode.toString() : '(parse_error)';
+    // DB interaction removed - fileId is no longer needed
 
-    // Construct the gRPC response
+    // 3. Parse SQL code
+    console.log('[SQL Analyzer] Parsing SQL content...');
+    const tree = parser.parse(sourceCode);
+    console.log('[SQL Analyzer] Parsing complete.');
+
+    // 4. Analyze the tree (needs refactoring)
+    // TODO: Refactor analyze function in analyzer.js for SQL
+    console.log('[SQL Analyzer] Analyzing syntax tree...');
+    const { nodes, relationships } = analyze(tree.rootNode, filePath, sourceCode); // Use correct camelCase keys
+    console.log(`[SQL Analyzer] Analysis complete. Nodes: ${nodes?.length ?? 0}, Relationships: ${relationships?.length ?? 0}`);
+
+    // 5. Format and send results via API
+    const analysisPayload = {
+        nodes: nodes, // Use corrected variable name
+        relationships: relationships // Use corrected variable name
+    };
+    await sendAnalysisData(analysisPayload);
+    console.log(`[SQL Analyzer] Successfully sent analysis results via API for ${filePath}.`);
+
+    // 6. Return simple StatusResponse
     callback(null, {
-        status: "SUCCESS", // Indicate successful parsing attempt
-        message: analysisResult // Send S-expression as placeholder result
+        status: "SUCCESS",
+        message: `Analysis complete and results sent for ${filePath}`
     });
-    console.log(`Successfully processed request for ${filePath || 'N/A'}`);
+    console.log(`[SQL Analyzer] Successfully processed request for ${filePath || 'N/A'}.`);
 
   } catch (error) {
-    console.error('Error analyzing SQL:', error);
+    console.error(`[SQL Analyzer] Error during analysis or API submission for ${filePath}:`, error);
     callback({
       code: grpc.status.INTERNAL,
-      details: `Failed to analyze SQL code: ${error instanceof Error ? error.message : String(error)}`
+      details: `Internal error during SQL analysis or API submission: ${error instanceof Error ? error.message : String(error)}`
     });
   }
 }
@@ -96,7 +122,8 @@ function main() {
   const server = new grpc.Server();
   // Add the service implementation to the server
   // Ensure the service name matches the one in analyzer.proto
-  server.addService(analyzerProto.AnalyzerService.service, { AnalyzeCode: analyzeCode });
+  // Case-sensitive method name must match the implementation function
+  server.addService(analyzerProto.AnalyzerService.service, { analyzeCode: analyzeCode });
 
   // Define the server address and port
   const serverAddress = `0.0.0.0:${GRPC_PORT}`;

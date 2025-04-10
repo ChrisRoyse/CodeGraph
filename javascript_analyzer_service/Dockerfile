@@ -5,12 +5,12 @@ WORKDIR /app
 
 # Install necessary tools for gRPC code generation and tree-sitter native modules
 # Install necessary tools for gRPC code generation, tree-sitter native modules, and TCP healthcheck (netcat)
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ netcat-openbsd && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ libpq-dev netcat-openbsd && rm -rf /var/lib/apt/lists/*
 
 # Copy package files and install dependencies
 COPY javascript_analyzer_service/package*.json ./
 # Use --legacy-peer-deps if needed for tree-sitter compatibility
-RUN npm install --production --legacy-peer-deps
+RUN npm install -g tree-sitter-cli && npm install --production --legacy-peer-deps && cd node_modules/tree-sitter-javascript && tree-sitter build
 
 # Copy protobuf definitions
 COPY protobufs /app/protobufs

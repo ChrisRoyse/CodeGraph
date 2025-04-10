@@ -1,6 +1,0 @@
-# tests/requirements.txt
-pytest
-requests
-neo4j>=5.0.0 # Specify a version compatible with Neo4j 5.x
-pytest-docker # Useful for managing docker-compose lifecycle in tests
-sqlparse # Needed for mocking in sql_analysis_service tests

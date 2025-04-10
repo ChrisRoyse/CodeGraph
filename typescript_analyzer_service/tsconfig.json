@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    /* Base Options: */
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "ES2016", // Or a later version like ES2020, ESNext
+    "allowJs": true, // Allow JS files to be included (like server.js if needed, though not compiled)
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+    "isolatedModules": true, // Recommended for faster builds, ensures each file is a module
+
+    /* Strictness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true, // Recommended for stricter checks
+
+    /* If NOT transpiling with TypeScript: */
+    // "module": "preserve", // Keep import/export syntax
+    // "noEmit": true, // Don't output JS files
+
+    /* If your code runs in the DOM: */
+    // "lib": ["esnext", "dom", "dom.iterable"],
+
+    /* If your code DOES NOT run in the DOM: */
+    "lib": ["esnext"],
+
+
+    /* Module settings */
+    "module": "CommonJS", // Output CommonJS for Node.js compatibility with server.js
+    "outDir": "./dist", // Output directory for compiled JS
+    "rootDir": ".", // Root directory of source files
+
+    /* Source Map settings */
+    "sourceMap": true, // Generate source maps for debugging
+    // "inlineSources": true, // Include source code in the source maps
+
+    /* Other settings */
+    "forceConsistentCasingInFileNames": true,
+  },
+  "include": ["**/*.ts"], // Compile all .ts files in the directory and subdirectories
+  "exclude": ["node_modules", "dist", "generated"] // Exclude node_modules, the output dir, and generated proto files
+}

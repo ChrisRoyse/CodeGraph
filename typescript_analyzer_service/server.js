@@ -2,9 +2,13 @@
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
-// Tree-sitter imports (will be used later)
-// const Parser = require('tree-sitter');
-// const TypeScript = require('tree-sitter-typescript').typescript; // Or .tsx if needed
+const Parser = require('tree-sitter');
+const TypeScript = require('tree-sitter-typescript').typescript; // Revert to accessing the .typescript property
+// Assuming analyzer.ts is compiled to dist/analyzer.js
+// Import the entire module to avoid potential destructuring conflicts
+const analyzerModule = require('./dist/analyzer');
+// Assuming analyzer.ts is compiled to dist/analyzer.js
+// Removed duplicate require statement below
 
 const PROTO_PATH = '/app/protobufs/analyzer.proto'; // Use absolute path inside container
 const GENERATED_PATH = path.join(__dirname, 'generated/src'); // Adjust if needed
@@ -24,33 +28,65 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 const analyzerProto = grpc.loadPackageDefinition(packageDefinition).analyzer; // Use the package name defined in proto
 
 // --- Service Implementation ---
+
+// Initialize the parser once
+const parser = new Parser();
+try {
+    parser.setLanguage(TypeScript);
+    console.log("[TS Analyzer] Tree-sitter TypeScript language loaded successfully.");
+} catch (err) {
+    console.error("[TS Analyzer] Error loading Tree-sitter TypeScript language:", err);
+    // Depending on recovery strategy, might exit or prevent service start
+    process.exit(1);
+}
+
+
 const analyzeCode = (call, callback) => {
-  console.log(`[TS Analyzer] Received analysis request for: ${call.request.file_path} (Language: ${call.request.language})`);
+  const filePath = call.request.file_path;
+  const sourceCode = call.request.code_content; // Renamed from file_content for clarity
+  const language = call.request.language; // e.g., 'typescript'
 
-  // --- Placeholder for Tree-sitter Parsing ---
+  console.log(`[TS Analyzer] Received analysis request for: ${filePath} (Language: ${language})`);
+
+  if (!sourceCode) {
+      console.warn(`[TS Analyzer] No code content provided for ${filePath}. Skipping analysis.`);
+      return callback(null, {
+          nodes: [],
+          relationships: [],
+          status: "SUCCESS", // Or perhaps a specific status like "NO_CONTENT"
+          message: `No code content provided for ${filePath}.`
+      });
+  }
+
   try {
-    // Example setup (actual parsing logic to be added later)
-    // const parser = new Parser();
-    // parser.setLanguage(TypeScript); // Use the correct grammar
-    // const sourceCode = call.request.file_content;
-    // const tree = parser.parse(sourceCode);
-    // const rootNode = tree.rootNode;
-    console.log(`[TS Analyzer] Stub analysis for ${call.request.file_path}...`);
-    // TODO: Implement actual Tree-sitter parsing and CPG generation (handle TS/TSX)
-    // TODO: Generate persistent entity IDs
-    // TODO: Convert CPG data to standardized Protobuf format
-    // TODO: Implement gRPC client to send results to Neo4j Ingestion Service
+    console.log(`[TS Analyzer] Parsing ${filePath}...`);
+    const tree = parser.parse(sourceCode);
+    const rootNode = tree.rootNode;
+    console.log(`[TS Analyzer] Parsing complete. Starting analysis for ${filePath}...`);
 
-    // For now, just return success
-    callback(null, {
-      status: "SUCCESS", // Or "DISPATCHED"
-      message: `Successfully received analysis request for ${call.request.file_path}`
-    });
+    // Call the modular analyze function from the compiled analyzer.js
+    // Access the analyze function via the imported module object
+    const analysisData = analyzerModule.analyze(rootNode, filePath, sourceCode);
+
+    console.log(`[TS Analyzer] Analysis finished for ${filePath}. Nodes: ${analysisData.nodes.length}, Relationships: ${analysisData.relationships.length}`);
+
+    // Construct the protobuf response
+    // The structure returned by analyze should match the AnalysisResult proto message
+    const result = {
+        nodes: analysisData.nodes,
+        relationships: analysisData.relationships,
+        status: "SUCCESS", // Indicate successful analysis
+        message: `Analysis successful for ${filePath}`
+    };
+
+    callback(null, result);
+
   } catch (e) {
-    console.error(`[TS Analyzer] Error during stub analysis for ${call.request.file_path}:`, e);
+    console.error(`[TS Analyzer] Error during analysis for ${filePath}:`, e);
+    // Send back a gRPC error status
     callback({
       code: grpc.status.INTERNAL,
-      details: `Internal error during analysis: ${e.message}`
+      details: `Internal error during analysis for ${filePath}: ${e.message}`
     });
   }
 };

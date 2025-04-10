@@ -3,3 +3,9 @@ grpcio-tools
 # For Tree-sitter parsing
 tree-sitter
 tree-sitter-languages
+# For HTTP API calls
+requests
+
+# For testing
+pytest
+pytest-mock

@@ -3,26 +3,25 @@ import os
 import sys
 import grpc
 import logging
+import ast
+import hashlib
+import atexit # For pool cleanup
 from concurrent import futures
 
-# Ensure the generated directory is in the path
-# This might be needed if PYTHONPATH isn't sufficient or for local execution
-# generated_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'generated', 'src'))
-# if generated_path not in sys.path:
-#     sys.path.insert(0, generated_path)
+# Import visitor component
+from .visitor import CodeAnalyzerVisitor
+# Ensure visitor_helpers and scope_manager are importable if visitor uses them
+from . import api_client # Import the new API client
+# (Python's import system should handle this if they are in the same package)
 
+# Import protobufs - Assuming StatusResponse is defined in analyzer.proto
 try:
-    # Assuming PYTHONPATH is set correctly in Docker environment to find 'generated.src'
     from generated.src import analyzer_pb2
     from generated.src import analyzer_pb2_grpc
 except ImportError as e:
     print(f"Error importing generated gRPC modules: {e}", file=sys.stderr)
-    print(f"Sys.path: {sys.path}", file=sys.stderr)
+    print("Ensure protobufs are generated and PYTHONPATH includes 'generated/src'.", file=sys.stderr)
     sys.exit(1)
-
-# Tree-sitter imports (will be used later)
-# from tree_sitter import Language, Parser
-# from tree_sitter_languages import get_language, get_parser
 
 # --- Logging Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -30,105 +29,118 @@ logger = logging.getLogger(__name__)
 
 # --- Service Implementation ---
 class PythonAnalyzerService(analyzer_pb2_grpc.AnalyzerServiceServicer):
-    def AnalyzeCode(self, request: analyzer_pb2.AnalyzeCodeRequest, context) -> analyzer_pb2.AnalysisResult:
+
+    # __init__ removed as DB pool initialization is no longer needed.
+    def AnalyzeCode(self, request: analyzer_pb2.AnalyzeCodeRequest, context) -> analyzer_pb2.StatusResponse:
         """
-        Receives code analysis requests, performs placeholder parsing,
-        and returns a structured AnalysisResult.
+        Receives code analysis requests, parses using AST, extracts data,
+        and writes results to the PostgreSQL database.
+        Returns a StatusResponse indicating success or failure.
         """
         logger.info(f"Received analysis request for: {request.file_path} (Language: {request.language})")
+        relative_path = request.file_path # Assuming file_path is relative
+        language = request.language.lower()
+        code_content = request.file_content
 
-        nodes = []
-        relationships = []
+        if language != "python":
+             logger.warning(f"Received request for non-python language: {language}")
+             return analyzer_pb2.StatusResponse(
+                 status="ERROR",
+                 message=f"Unsupported language: {language}. Expected Python."
+             )
+
         status = "SUCCESS"
-        error_message = ""
+        message = "Analysis complete and saved."
+        # file_id removed as it was DB-specific
 
         try:
-            logger.info(f"Performing placeholder analysis for {request.file_path}...")
+            # 1. Calculate code hash
+            code_hash = hashlib.sha256(code_content.encode('utf-8')).hexdigest()
+            logger.info(f"Code hash for {relative_path}: {code_hash[:8]}...")
 
-            # Placeholder CodeLocation for the entire file
-            file_loc = analyzer_pb2.CodeLocation(
-                file_path=request.file_path,
-                start_line=1,
-                start_column=0,
-                end_line=len(request.file_content.splitlines()), # Approximate end line
-                end_column=0
-            )
+            # 2. Get or Create File ID from DB
+            # Database interaction for file_id removed
+            logger.info(f"Processing file: {relative_path}")
 
-            # Placeholder Node for the File
-            file_node = analyzer_pb2.Node(
-                local_id=1,
-                global_id_candidate=request.file_path,
-                node_type="File",
-                properties={"name": os.path.basename(request.file_path)},
-                location=file_loc,
-                code_snippet=request.file_content[:100] # First 100 chars as snippet
-            )
-            nodes.append(file_node)
+            # 3. Parse code into AST
+            logger.info(f"Parsing Python code for {relative_path}...")
+            parsed_ast = ast.parse(code_content, filename=relative_path)
+            logger.info(f"AST parsing successful for {relative_path}.")
 
-            # Placeholder CodeLocation for a function
-            func_loc = analyzer_pb2.CodeLocation(
-                file_path=request.file_path,
-                start_line=5, # Placeholder line
-                start_column=0,
-                end_line=10, # Placeholder line
-                end_column=0
-            )
+            # 4. Run the visitor
+            # Pass relative_path, file_id, and code_content
+            # Pass relative_path and code_content (file_id removed)
+            visitor = CodeAnalyzerVisitor(relative_path, code_content)
+            visitor.visit(parsed_ast)
+            nodes_data, relationships_data = visitor.get_results()
+            logger.info(f"AST analysis complete. Nodes: {len(nodes_data)}, Relationships: {len(relationships_data)}")
 
-            # Placeholder Node for a Function
-            func_node = analyzer_pb2.Node(
-                local_id=2,
-                global_id_candidate=f"{request.file_path}::placeholder_function",
-                node_type="FunctionDefinition",
-                properties={"name": "placeholder_function", "signature": "()"},
-                location=func_loc,
-                code_snippet="def placeholder_function():\n  pass"
-            )
-            nodes.append(func_node)
+            # 5. Prepare and send data via API
+            analysis_data = {
+                # "filePath": relative_path, # Removed: Not part of the AnalysisData schema
+                "nodes": nodes_data,
+                "relationships": relationships_data
+            }
+            logger.info(f"Prepared analysis data for API submission for {relative_path}.")
 
-            # Placeholder Relationship: File DEFINES Function
-            defines_rel = analyzer_pb2.Relationship(
-                source_node_local_id=file_node.local_id,
-                target_node_local_id=func_node.local_id,
-                relationship_type="DEFINES",
-                location=func_loc # Relationship observed at function definition
-            )
-            relationships.append(defines_rel)
+            # Call the API client to send data
+            api_success = api_client.send_analysis_data(analysis_data)
 
-            logger.info(f"Placeholder analysis complete for {request.file_path}. Nodes: {len(nodes)}, Relationships: {len(relationships)}")
+            if not api_success:
+                # If API call fails, set status to ERROR and update message
+                status = "ERROR"
+                message = f"Analysis complete but failed to send data to API for {relative_path}."
+                logger.error(message)
+            else:
+                # Keep original success message if API call succeeds
+                message = f"Analysis complete and data sent to API for {relative_path}."
+                logger.info(message)
 
-        except Exception as e:
-            logger.exception(f"Error during placeholder analysis for {request.file_path}")
+        except SyntaxError as e:
+            logger.error(f"Syntax error during parsing of {relative_path}: {e}")
             status = "ERROR"
-            error_message = f"Error analyzing {request.file_path}: {str(e)}"
-            # Set gRPC context for error
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(error_message)
-            # Clear nodes/relationships on error? Or return partial? For now, clear.
-            nodes = []
-            relationships = []
+            line = getattr(e, 'lineno', 1)
+            col = getattr(e, 'offset', 0)
+            message = f"Syntax error in {relative_path} at line {line}, offset {col}: {e.msg}"
+            # Optionally: Write an error marker to the DB if needed
+        # Removed specific database error handling block entirely
+        except Exception as e:
+            logger.exception(f"Unexpected error during analysis for {relative_path}")
+            status = "ERROR"
+            message = f"Unexpected error analyzing {relative_path}: {str(e)}"
 
-
-        return analyzer_pb2.AnalysisResult(
-            analyzer_name="python_analyzer",
-            file_path=request.file_path,
-            nodes=nodes,
-            relationships=relationships,
+        # Return StatusResponse
+        return analyzer_pb2.StatusResponse(
             status=status,
-            error_message=error_message
+            message=message
         )
 
 # --- Server Setup ---
 def serve():
-    """Starts the gRPC server."""
-    port = os.getenv('GRPC_PORT', '50056') # Default to 50056 if not set
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    """Starts the gRPC server and initializes the DB pool."""
+    port = os.getenv('GRPC_PORT', '50056')
+    max_workers = int(os.getenv('MAX_WORKERS', '10')) # Default to 10 workers
+
+    # Initialize DB pool (moved to service __init__, but double-check if needed here)
+    # Removed commented out DB pool initialization
+
+    # Removed DB pool cleanup registration
+
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=max_workers))
     analyzer_pb2_grpc.add_AnalyzerServiceServicer_to_server(PythonAnalyzerService(), server)
-    server_address = f'[::]:{port}' # Listen on all interfaces
+    server_address = f'[::]:{port}'
+
+    # TODO: Add support for secure connection based on environment variables
     server.add_insecure_port(server_address)
-    logger.info(f"Starting Python Analyzer gRPC server on {server_address}")
+    logger.info(f"Starting Python Analyzer gRPC server on {server_address} with {max_workers} workers")
     server.start()
-    logger.info("Server started.")
-    server.wait_for_termination()
+    logger.info("Server started. Waiting for termination...")
+    try:
+        server.wait_for_termination()
+    except KeyboardInterrupt:
+        logger.info("Server stopping due to KeyboardInterrupt.")
+        server.stop(0) # Graceful stop
+        # Pool cleanup is handled by atexit
 
 if __name__ == '__main__':
     serve()

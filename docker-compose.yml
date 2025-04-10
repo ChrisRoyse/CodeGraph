@@ -8,24 +8,10 @@ volumes:
   neo4j_data: # Note: Not currently used as we connect externally
   shared_code_input:
   shared_cpg_output:
+  postgres_data: {} # Define named volume for PostgreSQL data
 
 services:
   # Neo4j service block removed to use external Neo4j Desktop instance
-  code_fetcher_service:
-    build:
-      context: .
-      dockerfile: ./code_fetcher_service/Dockerfile
-    networks:
-      - bmcp_network
-    volumes:
-      - shared_code_input:/shared_data/code_input
-      - ./test_fixtures:/app/test_fixtures:ro
-    ports:
-      - "50051:50051"
-    environment:
-      GRPC_PORT: 50051
-      SHARED_CODE_PATH: /shared_data/code_input
-      PYTHONPATH: /app
 
   joern_analysis_service:
     build:
@@ -42,8 +28,7 @@ services:
     environment:
       GRPC_PORT: 50053
       _JAVA_OPTS: ${JOERN_JAVA_OPTS:--Xmx4g}
-    depends_on:
-      - code_fetcher_service
+    # depends_on removed as code_fetcher_service is deleted
 
   treesitter_sql_analyzer:
     build:
@@ -58,15 +43,14 @@ services:
       - "50054:50054"
     environment:
       GRPC_PORT: 50054
-    healthcheck:
-      # Use netcat (nc) to check if the port is listening
-      test: ["CMD", "nc", "-z", "localhost", "50054"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s # Give time for server to start before checking
+      POSTGRES_HOST: postgres_db
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres} # Use default 'postgres' if not set
+      POSTGRES_DB: ${DB_NAME:-bmcp_db}
+      POSTGRES_PORT: 5432
     depends_on:
-      - code_fetcher_service
+      postgres_db:
+        condition: service_started
 
   python_analyzer_service:
     build:
@@ -82,9 +66,15 @@ services:
     environment:
       GRPC_PORT: 50056
       PYTHONPATH: /app:/app/generated/src
-    # TODO: Add healthcheck using grpcio-health-checking or nc if needed
+      POSTGRES_HOST: postgres_db
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-bmcp_db}
+      POSTGRES_PORT: 5432 # Default PostgreSQL port
+    # depends_on removed as code_fetcher_service is deleted
     depends_on:
-      - code_fetcher_service
+      postgres_db:
+        condition: service_started
 
   javascript_analyzer_service:
     build:
@@ -99,15 +89,14 @@ services:
       - "50057:50057"
     environment:
       GRPC_PORT: 50057
-    healthcheck:
-      # Use netcat (nc) to check if the port is listening
-      test: ["CMD", "nc", "-z", "localhost", "50057"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      POSTGRES_HOST: postgres_db
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres} # Use default 'postgres' if not set
+      POSTGRES_DB: ${DB_NAME:-bmcp_db}
+      POSTGRES_PORT: 5432
     depends_on:
-      - code_fetcher_service
+      postgres_db:
+        condition: service_started
 
   typescript_analyzer_service:
     build:
@@ -122,15 +111,14 @@ services:
       - "50058:50058"
     environment:
       GRPC_PORT: 50058
-    healthcheck:
-      # Use netcat (nc) to check if the port is listening
-      test: ["CMD", "nc", "-z", "localhost", "50058"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      POSTGRES_HOST: postgres_db
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres} # Use default 'postgres' if not set
+      POSTGRES_DB: ${DB_NAME:-bmcp_db}
+      POSTGRES_PORT: 5432
     depends_on:
-      - code_fetcher_service
+      postgres_db:
+        condition: service_started
 
   neo4j_ingestion_service:
     build:
@@ -142,17 +130,29 @@ services:
       - shared_cpg_output:/shared_data/cpg_output:ro
     ports:
       - "50055:50055"
-    environment:
+    env_file:
+      - .env
+    environment: # Ensure this block exists and is correctly indented
       GRPC_PORT: 50055
       SHARED_CPG_PATH: /shared_data/cpg_output
       NEO4J_URI: bolt://host.docker.internal:7687
       NEO4J_USER: ${NEO4J_USER:-neo4j} # Allow override from .env
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-test1234} # Allow override from .env
-      PYTHONPATH: /app
-    # TODO: Add healthcheck using grpcio-health-checking or nc if needed
-    depends_on:
-      # Dependency on internal neo4j service removed
-      - joern_analysis_service # Wait for Joern service to start
+      # SECURITY: Using environment variable with no default value
+      # This ensures passwords aren't hardcoded in source code
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD} # Must be set in .env file
+      PYTHONPATH: /app:/app/generated/src # Add generated path
+      # Add PostgreSQL connection details
+      POSTGRES_HOST: postgres_db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-bmcp_db}
+      NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j} # Add database name from .env
+    depends_on: # Correct indentation
+      postgres_db:
+        condition: service_started
+      joern_analysis_service: # Wait for Joern service to start (simple dependency)
+        condition: service_started # Joern doesn't have a healthcheck yet
 
   api_gateway:
     build:
@@ -161,12 +161,12 @@ services:
     networks:
       - bmcp_network
     ports:
-      - "8000:8000"
+      - "8043:8043" # Changed host and container port
     volumes:
       - ./test_fixtures:/app/test_fixtures:ro
     environment:
-      HTTP_PORT: 8000
-      CODE_FETCHER_SERVICE_ADDRESS: code_fetcher_service:50051
+      HTTP_PORT: 8043 # Changed container port
+      # CODE_FETCHER_SERVICE_ADDRESS removed as service is deleted
       JOERN_ANALYSIS_SERVICE_ADDRESS: joern_analysis_service:50053
       NEO4J_INGESTION_SERVICE_ADDRESS: neo4j_ingestion_service:50055
       SQL_ANALYSIS_SERVICE_ADDRESS: treesitter_sql_analyzer:50054
@@ -175,21 +175,66 @@ services:
       TYPESCRIPT_ANALYZER_ADDRESS: typescript_analyzer_service:50058
       NEO4J_URI: bolt://host.docker.internal:7687
       NEO4J_USER: ${NEO4J_USER:-neo4j} # Allow override from .env
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-test1234} # Allow override from .env
+      # SECURITY: Using environment variable with no default value
+      # This ensures passwords aren't hardcoded in source code
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD} # Must be set in .env file
       PROJECT_BASE_PATH: /app
-      PYTHONPATH: /app:/app/generated/src
+      PYTHONPATH: /app
     depends_on:
-      code_fetcher_service:
-        condition: service_started # Basic dependency
+      # code_fetcher_service dependency removed
       joern_analysis_service:
-        condition: service_started # Basic dependency (no healthcheck yet)
+        condition: service_started
       neo4j_ingestion_service:
-        condition: service_started # Basic dependency (no healthcheck yet)
+        condition: service_started # Changed from service_healthy
       treesitter_sql_analyzer:
-        condition: service_healthy # Wait for TCP healthcheck
+        condition: service_started
       python_analyzer_service:
-        condition: service_started # Basic dependency (no healthcheck yet)
+        condition: service_started # Changed from service_healthy
       javascript_analyzer_service:
-        condition: service_healthy # Wait for TCP healthcheck
+        condition: service_started
       typescript_analyzer_service:
-        condition: service_healthy # Wait for TCP healthcheck
+        condition: service_started
+      postgres_db: # Add dependency on postgres
+        condition: service_started
+  postgres_db:
+    image: postgres:latest
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres} # Default to 'postgres' if not set in .env
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres} # Default to 'postgres' if not set in .env
+      POSTGRES_DB: ${DB_NAME:-bmcp_db} # Default to 'bmcp_db' if not set in .env
+      PGDATA: /var/lib/postgresql/data/pgdata # Recommended for performance
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/pgdata
+      - ./postgres_init:/docker-entrypoint-initdb.d # Mount local init scripts for schema creation
+    ports:
+      - "5432:5432"
+    networks:
+      - bmcp_network
+    healthcheck:
+      disable: true
+
+    restart: unless-stopped
+
+  python_app_service: # New service for the Python backend app
+    build:
+      context: .
+      dockerfile: ./python_app_service/Dockerfile
+    networks:
+      - bmcp_network
+    ports:
+      - "50052:50052" # Changed host and container port
+    environment:
+      # Pass database credentials from .env file
+      DB_HOST: postgres_db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-bmcp_db}
+      PYTHONPATH: /app
+      # Add any other necessary environment variables for the app (e.g., APP_PORT=8001)
+      APP_PORT: 50052 # Changed container port
+    depends_on:
+      postgres_db:
+        condition: service_started # Changed from service_healthy
+    restart: unless-stopped

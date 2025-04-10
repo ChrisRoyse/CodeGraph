@@ -59,14 +59,17 @@ message Relationship {
 }
 
 // The result produced by a single language analyzer for a given file.
-message AnalysisResult {
-  string analyzer_name = 1;   // Identifier for the analyzer (e.g., "python_analyzer", "sql_analyzer").
-  string file_path = 2;       // Path of the file analyzed.
-  repeated Node nodes = 3;          // List of nodes found in the file.
-  repeated Relationship relationships = 4; // List of relationships found in the file.
-  string status = 5;          // e.g., "SUCCESS", "PARTIAL_SUCCESS", "ERROR"
-  string error_message = 6;   // Optional error details if status is not SUCCESS.
-}
+// NOTE: This message is no longer the primary return type for AnalyzeCode.
+// It might still be referenced indirectly or used internally by older components.
+// Commenting out for now as part of the shift to SQL persistence and StatusResponse.
+// message AnalysisResult {
+//   string analyzer_name = 1;   // Identifier for the analyzer (e.g., "python_analyzer", "sql_analyzer").
+//   string file_path = 2;       // Path of the file analyzed.
+//   repeated Node nodes = 3;          // List of nodes found in the file.
+//   repeated Relationship relationships = 4; // List of relationships found in the file.
+//   string status = 5;          // e.g., "SUCCESS", "PARTIAL_SUCCESS", "ERROR"
+//   string error_message = 6;   // Optional error details if status is not SUCCESS.
+// }
 
 
 // The request message containing the code to analyze
@@ -78,8 +81,16 @@ message AnalyzeCodeRequest {
   map<string, string> context = 4;
 }
 
+// Response message indicating the status of the analysis request
+message StatusResponse {
+  string status = 1; // e.g., "SUCCESS", "ERROR"
+  string message = 2; // Detailed message, potentially including error info
+}
+
+
 // The service definition for language analyzers
 service AnalyzerService {
-  // Analyzes the provided code and returns intermediate nodes and relationships.
-  rpc AnalyzeCode (AnalyzeCodeRequest) returns (AnalysisResult);
+  // Analyzes the provided code and returns a status indication.
+  // The actual analysis results (nodes, relationships) are now written directly to the SQL database.
+  rpc AnalyzeCode (AnalyzeCodeRequest) returns (StatusResponse);
 }

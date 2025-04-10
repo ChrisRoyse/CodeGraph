@@ -4,11 +4,13 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Install git (needed for tree-sitter grammar installation) and build essentials
-RUN apt-get update && apt-get install -y --no-install-recommends git build-essential && rm -rf /var/lib/apt/lists/*
+# Install git, build essentials, postgres client dev libraries, python dev headers, and netcat
+RUN apt-get update && apt-get install -y --no-install-recommends git build-essential libpq-dev python3-dev netcat-openbsd && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for caching
 COPY python_analyzer_service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# Removed grpc_health_probe installation
 
 # Copy protobuf definitions (assuming they are needed for response generation eventually)
 COPY protobufs /app/protobufs
@@ -30,7 +32,7 @@ RUN mkdir -p /app/generated/src && \
 # RUN tree-sitter-languages install python # Or install via pip if available as a package
 
 # Copy the rest of the service code
-COPY python_analyzer_service/. .
+COPY python_analyzer_service/ /app/python_analyzer_service/
 
 # Expose the gRPC port (choose a unique one, e.g., 50056)
 EXPOSE 50056
@@ -41,4 +43,4 @@ ENV GRPC_PORT=50056
 ENV PYTHONPATH=/app
 
 # Run the gRPC server
-CMD ["python", "main.py"]
+CMD ["python", "-m", "python_analyzer_service.main"]

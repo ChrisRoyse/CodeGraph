@@ -8,6 +8,9 @@ WORKDIR /app
 # Copy only this service's requirements file
 COPY neo4j_ingestion_service/requirements.txt .
 
+# Install build dependencies for psycopg2
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev && rm -rf /var/lib/apt/lists/*
+
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -25,15 +28,24 @@ RUN mkdir -p /app/generated/src && \
         --python_out=/app/generated/src \
         --grpc_python_out=/app/generated/src \
         /app/protobufs/*.proto
+RUN ls -l /app/generated/src
+
 
 # Copy only this service's source code
-COPY neo4j_ingestion_service/. .
+# Ensure any old resolver.py is removed before copying
+RUN rm -f resolver.py
+
+COPY neo4j_ingestion_service/ /app/neo4j_ingestion_service/
 
 # Make port 50053 available (as defined in docker-compose.yml)
 EXPOSE 50053
 
 # Define environment variable (can be overridden by docker-compose)
 ENV GRPC_PORT=50053
+ENV PYTHONPATH=/app:/app/generated/src
+
+
 
 # Run main.py when the container launches
-CMD ["python", "main.py"]
+# Run the main script which now orchestrates resolve -> fetch -> ingest
+CMD ["python", "-u", "-m", "neo4j_ingestion_service.main"]

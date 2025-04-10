@@ -8,5 +8,8 @@ grpcio
 grpcio-tools
 protobuf
 neo4j
+psycopg2-binary # For PostgreSQL connection
+python-dotenv # For loading .env file
 
 grpcio-tools>=1.48.0 # For generating code during build
+grpcio-health-checking>=1.48.0 # For health checks

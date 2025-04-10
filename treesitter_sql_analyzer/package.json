@@ -5,14 +5,18 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "dependencies": {
+    "@derekstride/tree-sitter-sql": "^0.3.8",
     "@grpc/grpc-js": "^1.8.0",
     "@grpc/proto-loader": "^0.7.0",
-    "@derekstride/tree-sitter-sql": "^0.3.8",
+    "axios": "^1.6.0",
     "tree-sitter": "^0.21.0"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
 }

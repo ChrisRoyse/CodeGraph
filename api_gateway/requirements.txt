@@ -9,5 +9,6 @@ uvicorn[standard]
 grpcio
 grpcio-tools
 protobuf
+neo4j
 
 grpcio-tools>=1.48.0 # For generating code during build
