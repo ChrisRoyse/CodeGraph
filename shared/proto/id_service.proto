@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package bmcp.id_service;
+
+// Options for language-specific code generation
+option go_package = "github.com/bmcp/id_service";
+option java_multiple_files = true;
+option java_package = "com.bmcp.id_service";
+option java_outer_classname = "IdServiceProto";
+
+// IdService provides centralized ID generation and parsing
+service IdService {
+  // GenerateId generates a canonical ID and GID for a given entity
+  rpc GenerateId(GenerateIdRequest) returns (GenerateIdResponse);
+  
+  // ParseId parses a canonical ID or GID into its components
+  rpc ParseId(ParseIdRequest) returns (ParseIdResponse);
+}
+
+// GenerateIdRequest contains all context needed for ID generation
+message GenerateIdRequest {
+  // Path to the file containing the entity, relative to the monitored root
+  string file_path = 1;
+  
+  // Type of entity (Function, Class, Method, etc.)
+  string entity_type = 2;
+  
+  // Name of the entity
+  string name = 3;
+  
+  // Canonical ID of the parent entity (optional)
+  string parent_canonical_id = 4;
+  
+  // Parameter types for functions/methods (optional)
+  repeated string param_types = 5;
+  
+  // Language hint to help with ID generation (optional)
+  string language_hint = 6;
+}
+
+// GenerateIdResponse contains the generated IDs
+message GenerateIdResponse {
+  // The canonical ID for the entity
+  string canonical_id = 1;
+  
+  // The global ID (GID) for the entity
+  string gid = 2;
+}
+
+// ParseIdRequest contains the ID string to parse
+message ParseIdRequest {
+  // The ID string to parse (can be canonical ID or GID)
+  string id_string = 1;
+}
+
+// ParseIdResponse contains the components of the parsed ID
+message ParseIdResponse {
+  // Path to the file containing the entity
+  string file_path = 1;
+  
+  // Type of entity
+  string entity_type = 2;
+  
+  // Name of the entity
+  string name = 3;
+  
+  // Canonical ID of the parent entity (if any)
+  string parent_canonical_id = 4;
+  
+  // Parameter types (if applicable)
+  repeated string param_types = 5;
+  
+  // Original canonical ID (if a GID was parsed)
+  string canonical_id = 6;
+  
+  // Language prefix (if a GID was parsed)
+  string language_prefix = 7;
+  
+  // Original GID (if a canonical ID was parsed)
+  string gid = 8;
+}

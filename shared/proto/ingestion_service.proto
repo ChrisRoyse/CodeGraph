@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package bmcp.ingestion_service;
+
+// Options for language-specific code generation
+option go_package = "github.com/bmcp/ingestion_service";
+option java_multiple_files = true;
+option java_package = "com.bmcp.ingestion_service";
+option java_outer_classname = "IngestionServiceProto";
+
+// IngestionService handles ingestion of analysis results into the Neo4j database
+service IngestionService {
+  // IngestResults ingests analysis results into the Neo4j database
+  rpc IngestResults(IngestResultsRequest) returns (IngestResultsResponse);
+  
+  // ResolvePendingRelationships resolves pending relationships in the Neo4j database
+  rpc ResolvePendingRelationships(ResolvePendingRelationshipsRequest) returns (ResolvePendingRelationshipsResponse);
+}
+
+// IngestResultsRequest contains analysis results to ingest
+message IngestResultsRequest {
+  // Serialized AnalyzerResultPayload containing nodes and relationships
+  string result_payload = 1;
+}
+
+// IngestResultsResponse contains the result of the ingestion operation
+message IngestResultsResponse {
+  // Whether the ingestion was successful
+  bool success = 1;
+  
+  // Error message if ingestion failed
+  string error_message = 2;
+  
+  // Number of nodes ingested
+  int32 nodes_ingested = 3;
+  
+  // Number of relationships ingested
+  int32 relationships_ingested = 4;
+  
+  // Number of pending relationships created
+  int32 pending_relationships_created = 5;
+}
+
+// ResolvePendingRelationshipsRequest triggers resolution of pending relationships
+message ResolvePendingRelationshipsRequest {
+  // Maximum number of pending relationships to resolve (optional)
+  int32 max_count = 1;
+}
+
+// ResolvePendingRelationshipsResponse contains the result of the resolution operation
+message ResolvePendingRelationshipsResponse {
+  // Whether the resolution was successful
+  bool success = 1;
+  
+  // Error message if resolution failed
+  string error_message = 2;
+  
+  // Number of relationships resolved
+  int32 relationships_resolved = 3;
+  
+  // Number of pending relationships remaining
+  int32 pending_relationships_remaining = 4;
+}

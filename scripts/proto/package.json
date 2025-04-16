@@ -1,0 +1,20 @@
+{
+  "name": "proto",
+  "version": "1.0.0",
+  "description": "",
+  "main": "compile_node.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "glob": "^11.0.1",
+    "grpc-tools": "^1.13.0"
+  },
+  "devDependencies": {
+    "ts-proto": "^2.7.0"
+  }
+}

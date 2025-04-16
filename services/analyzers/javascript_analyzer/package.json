@@ -1,0 +1,37 @@
+{
+  "name": "javascript-analyzer",
+  "version": "0.1.0",
+  "description": "JavaScript/TypeScript Analyzer for CodeGraph",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "test": "jest",
+    "lint": "eslint . --ext .ts"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.8.14",
+    "@grpc/proto-loader": "^0.7.7",
+    "amqplib": "^0.10.3",
+    "dotenv": "^16.0.3",
+    "tree-sitter": "^0.20.1",
+    "tree-sitter-javascript": "^0.19.0",
+    "tree-sitter-typescript": "^0.20.1",
+    "pg": "^8.11.1"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.1",
+    "@types/jest": "^29.5.1",
+    "@types/node": "^18.16.0",
+    "@typescript-eslint/eslint-plugin": "^5.59.1",
+    "@typescript-eslint/parser": "^5.59.1",
+    "eslint": "^8.39.0",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.1.0",
+    "ts-node": "^10.9.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.0.4",
+    "@types/pg": "^8.10.7"
+  }
+}

@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package bmcp.analyzer_service;
+
+// Options for language-specific code generation
+option go_package = "github.com/bmcp/analyzer_service";
+option java_multiple_files = true;
+option java_package = "com.bmcp.analyzer_service";
+option java_outer_classname = "AnalyzerServiceProto";
+
+// AnalyzerService provides language-specific code analysis
+service AnalyzerService {
+  // Analyze performs analysis on a file and returns the results
+  rpc Analyze(AnalyzeRequest) returns (AnalyzeResponse);
+}
+
+// AnalyzeRequest contains information about the file to analyze
+message AnalyzeRequest {
+  // Path to the file to analyze, relative to the monitored root
+  string file_path = 1;
+  
+  // Content of the file to analyze
+  string content = 2;
+  
+  // Language of the file (python, javascript, typescript, etc.)
+  string language = 3;
+}
+
+// AnalyzeResponse contains the analysis results
+message AnalyzeResponse {
+  // Whether the analysis was successful
+  bool success = 1;
+  
+  // Error message if analysis failed
+  string error_message = 2;
+  
+  // Serialized AnalyzerResultPayload containing nodes and relationships
+  string result_payload = 3;
+}

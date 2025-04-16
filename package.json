@@ -1,0 +1,28 @@
+{
+  "name": "bmcp-realtime",
+  "version": "0.1.0",
+  "description": "BMCP Realtime Services",
+  "main": "index.js",
+  "scripts": {
+    "compile-protos": "scripts/compile_protos.sh",
+    "test": "jest --runInBand --config=jest.config.js",
+    "test:e2e": "jest --runInBand --config=jest.config.js tests/e2e/"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.8.14",
+    "@grpc/proto-loader": "^0.7.7",
+    "glob": "^10.4.5"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^18.16.0",
+    "grpc-tools": "^1.12.4",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.3.2",
+    "typescript": "^5.0.4"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "private": true
+}

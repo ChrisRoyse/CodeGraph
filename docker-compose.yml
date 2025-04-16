@@ -1,0 +1,227 @@
+version: '3.8'
+
+services:
+  # RabbitMQ service
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: codegraph-rabbitmq
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"      # AMQP port
+      - "${RABBITMQ_UI_PORT:-15672}:15672" # Management UI port
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-guest}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq    # Persistence for queue data
+      - ./scripts/setup_rabbitmq.sh:/docker-entrypoint-initdb.d/setup_rabbitmq.sh
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # Neo4j service
+  neo4j:
+    image: neo4j:latest
+    container_name: codegraph-neo4j
+    ports:
+      - "7475:7474"  # Neo4j browser port (Host port changed to avoid conflict)
+      - "7688:7687"  # Bolt port (Host port changed to avoid conflict)
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-password}
+      - NEO4J_dbms_memory_heap_initial__size=${NEO4J_HEAP_INITIAL:-512M}
+      - NEO4J_dbms_memory_heap_max__size=${NEO4J_HEAP_MAX:-1G}
+      - NEO4J_dbms_memory_pagecache_size=${NEO4J_PAGECACHE:-512M}
+      - NEO4J_dbms_default__database=${NEO4J_DATABASE:-codegraph}
+    volumes:
+      - neo4j_data:/data      # Persistence for Neo4j data
+      - neo4j_logs:/logs      # Persistence for Neo4j logs
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7474"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  # PostgreSQL service
+  postgres:
+    image: postgres:latest
+    container_name: codegraph-postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-codegraph}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Persistence for PostgreSQL data
+      - ./sql:/host_code/sql:ro  # Mount migration scripts for repeatable DB setup
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ID Service
+  id_service:
+    build:
+      context: ./services/id_service
+      dockerfile: Dockerfile
+    container_name: codegraph-id-service
+    ports:
+      - "${ID_SERVICE_PORT:-50051}:50051"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./shared/proto:/shared/proto:ro
+      # Uncomment and adjust if TS proto output is needed:
+      # - ./shared/models/typescript/generated:/app/generated:ro
+    depends_on:
+      - neo4j
+      - rabbitmq
+    restart: unless-stopped
+
+  # Scan Orchestrator
+  scan_orchestrator:
+    build:
+      context: .
+      dockerfile: services/Dockerfile.scan_orchestrator
+    container_name: codegraph-scan-orchestrator
+    command: python services/scan_orchestrator.py
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${SCAN_ORCHESTRATOR_LOG_LEVEL:-info}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-rabbitmq}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - POSTGRES_HOST=postgres
+    volumes:
+      - ./:/host_code:ro
+    depends_on:
+      - rabbitmq
+    restart: unless-stopped
+
+  # File Watcher Service
+  file_watcher_service:
+    build:
+      context: ./services/file_watcher_service
+      dockerfile: Dockerfile
+    container_name: codegraph-file-watcher
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${FILE_WATCHER_LOG_LEVEL:-info}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-rabbitmq}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - MONITORED_PATHS=/codebase
+      - POLLING_INTERVAL=${FILE_WATCHER_POLLING_INTERVAL:-5000}
+    volumes:
+      - ./:/app:ro
+      - ./shared/proto:/shared/proto:ro
+    depends_on:
+      - rabbitmq
+    restart: unless-stopped
+
+  # Python Analyzer
+  python_analyzer:
+    build:
+      context: .
+      dockerfile: services/analyzers/python_analyzer/Dockerfile
+    container_name: codegraph-python-analyzer
+    command: python services/analyzers/python_analyzer/main.py
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${PYTHON_ANALYZER_LOG_LEVEL:-info}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-rabbitmq}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - RABBITMQ_JOBS_QUEUE=bmcp.jobs.analysis.python
+    volumes:
+      - ./:/app:ro
+      - ./shared/proto:/shared/proto:ro
+    depends_on:
+      - rabbitmq
+    restart: unless-stopped
+
+  # JavaScript Analyzer
+  javascript_analyzer:
+    build:
+      context: ./services/analyzers/javascript_analyzer
+      dockerfile: Dockerfile
+    container_name: codegraph-javascript-analyzer
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - LOG_LEVEL=${JS_ANALYZER_LOG_LEVEL:-info}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-rabbitmq}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+    depends_on:
+      - rabbitmq
+    restart: unless-stopped
+
+  # Ingestion Worker
+  ingestion_worker:
+    build:
+      context: ./services/ingestion_worker
+      dockerfile: Dockerfile
+    container_name: codegraph-ingestion-worker
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${INGESTION_WORKER_LOG_LEVEL:-info}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-rabbitmq}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - NEO4J_HOST=${NEO4J_HOST:-neo4j}
+      - NEO4J_PORT=${NEO4J_BOLT_PORT:-7687}
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-password}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-codegraph}
+      - BATCH_SIZE=${INGESTION_WORKER_BATCH_SIZE:-10}
+    depends_on:
+      - rabbitmq
+      - neo4j
+    restart: unless-stopped
+
+  # API Gateway
+  api_gateway:
+    build:
+      context: ./services/api_gateway
+      dockerfile: Dockerfile
+    container_name: codegraph-api-gateway
+    ports:
+      - "${API_GATEWAY_PORT:-8000}:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${API_GATEWAY_LOG_LEVEL:-info}
+      - NEO4J_HOST=${NEO4J_HOST:-neo4j}
+      - NEO4J_PORT=${NEO4J_BOLT_PORT:-7687}
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-password}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-codegraph}
+      - ID_SERVICE_HOST=${ID_SERVICE_HOST:-id_service}
+      - ID_SERVICE_PORT=${ID_SERVICE_PORT:-50051}
+    depends_on:
+      - neo4j
+      - id_service
+    restart: unless-stopped
+
+volumes:
+  rabbitmq_data:
+    name: codegraph-rabbitmq-data
+  neo4j_data:
+    name: codegraph-neo4j-data
+  neo4j_logs:
+    name: codegraph-neo4j-logs
+  postgres_data:
+    name: codegraph-postgres-data

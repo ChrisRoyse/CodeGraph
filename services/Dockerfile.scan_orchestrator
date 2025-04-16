@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY services/requirements.scan_orchestrator.txt /app/requirements.scan_orchestrator.txt
+RUN ls -l /app
+RUN cat /app/requirements.scan_orchestrator.txt
+RUN pip install --no-cache-dir -r /app/requirements.scan_orchestrator.txt
+COPY . /app
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python", "scan_orchestrator.py"]

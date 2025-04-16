@@ -1,0 +1,4 @@
+# Add python-dotenv for environment variable support
+python-dotenv
+pika
+psycopg2-binary

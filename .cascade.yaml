@@ -1,0 +1,66 @@
+name: "SPARC-Orchestrator"
+ description: "SPARC dynamic multi-mode orchestrator using GPT-4.1"
+ automation:
+ auto_continue: true
+ ask_for_confirmation: false
+
+ layers:
+ - name: "Task Classifier"
+ model: "gpt-4.1"
+ description: "Classifies input to route to correct SPARC mode"
+ prompt: |
+ Classify the task based on SPARC modes. Output only the mode slug:
+ Choices:
+ - spec-pseudocode
+ - architect
+ - code
+ - tdd
+ - debug
+ - security-review
+ - docs-writer
+ - integration
+ - post-deployment-monitoring-mode
+ - refinement-optimization-mode
+ - devops
+ - ask
+
+ Input:
+ {{ cascade.input }}
+
+ output_mapping:
+ spec-pseudocode: "spec"
+ architect: "architect"
+ code: "code"
+ tdd: "tdd"
+ debug: "debug"
+ security-review: "security"
+ docs-writer: "docs"
+ integration: "integration"
+ post-deployment-monitoring-mode: "monitor"
+ refinement-optimization-mode: "optimize"
+ devops: "devops"
+ ask: "ask"
+
+ - name: "SPARC Mode Executor"
+ model: "gpt-4.1"
+ description: "Executes task according to the identified SPARC mode"
+ dynamic_prompt:
+ template: |
+ You are operating in SPARC mode: {{ cascade.previous_output }}
+
+ 📦 Follow these mode-specific rules:
+ - No hardcoded secrets or env vars
+ - Keep files < 500 lines
+ - Use `new_task` for subtasks, and always close with `attempt_completion`
+ - Use MCP server for context enrichment (http://localhost:3000)
+
+ 📝 User Request:
+ {{ cascade.input }}
+
+ - name: "Verification & Enhancement"
+ model: "gpt-4.1"
+ description: "Verifies compliance and improves final output"
+ prompt: |
+ Review output for:
+ ✅ Mode compliance
+ ✅ MCP usage
