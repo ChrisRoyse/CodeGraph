@@ -36,7 +36,7 @@ def batch_insert_nodes(nodes):
         with conn.cursor() as cur:
             args = [
                 (
-                    n['canonical_id'], n['name'], n['type'], 'python', n['path'],
+                    n.get('canonical_id', ''), n.get('name', ''), n.get('type', ''), 'python', n.get('path', ''),
                     psycopg2.extras.Json(n.get('properties', {}))
                 )
                 for n in nodes

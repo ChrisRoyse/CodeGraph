@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   # RabbitMQ service
@@ -93,7 +92,7 @@ services:
       context: .
       dockerfile: services/Dockerfile.scan_orchestrator
     container_name: codegraph-scan-orchestrator
-    command: python services/scan_orchestrator.py
+    # command: python services/scan_orchestrator.py
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${SCAN_ORCHESTRATOR_LOG_LEVEL:-info}
@@ -103,9 +102,10 @@ services:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
       - POSTGRES_HOST=postgres
     volumes:
-      - ./:/host_code:ro
+      - .:/app
     depends_on:
       - rabbitmq
+      - neo4j
     restart: unless-stopped
 
   # File Watcher Service
@@ -182,8 +182,8 @@ services:
       - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
       - RABBITMQ_USER=${RABBITMQ_USER:-guest}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
-      - NEO4J_HOST=${NEO4J_HOST:-neo4j}
-      - NEO4J_PORT=${NEO4J_BOLT_PORT:-7687}
+      - NEO4J_URI=bolt://host.docker.internal:7687
+
       - NEO4J_USER=${NEO4J_USER:-neo4j}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-password}
       - NEO4J_DATABASE=${NEO4J_DATABASE:-codegraph}
@@ -204,8 +204,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${API_GATEWAY_LOG_LEVEL:-info}
-      - NEO4J_HOST=${NEO4J_HOST:-neo4j}
-      - NEO4J_PORT=${NEO4J_BOLT_PORT:-7687}
+      - NEO4J_URI=bolt://host.docker.internal:7687
+
       - NEO4J_USER=${NEO4J_USER:-neo4j}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-password}
       - NEO4J_DATABASE=${NEO4J_DATABASE:-codegraph}

@@ -127,6 +127,128 @@ class IdServiceClient:
 
 class PythonAstVisitor(ast.NodeVisitor):
     """AST visitor to extract Python code structure and relationships, including bmcp hint parsing."""
+
+    def __init__(self, file_path: str, id_service_client: 'IdServiceClient'):
+        self.file_path = file_path
+        self.id_service_client = id_service_client
+        self.nodes = []
+        self.relationships = []
+        self.current_class = None
+        self.current_class_canonical_id = None
+        self.current_function = None
+        self.current_function_gid = None
+        self.current_function_canonical_id = None
+        self.file_canonical_id = None
+        self.file_gid = None
+        self.logger = logging.getLogger("PythonAstVisitor")
+        # Optimization: cache for ID service calls
+        self._id_cache = {}
+
+    def _log_and_append_node(self, node_obj):
+        self.logger.info(f"Extracted node: {json.dumps(node_obj, default=str)}")
+        self.nodes.append(node_obj)
+
+    def _log_and_append_relationship(self, rel_obj):
+        self.logger.info(f"Extracted relationship: {json.dumps(rel_obj, default=str)}")
+        self.relationships.append(rel_obj)
+
+    def visit_Import(self, node):
+        self.logger.debug(f"visit_Import called on file: {self.file_path}")
+        for alias in node.names:
+            canonical_id, gid = self.id_service_client.generate_id(
+                file_path=self.file_path,
+                entity_type='Import',
+                name=alias.name,
+                parent_canonical_id=self.file_canonical_id
+            )
+            node_obj = {
+                'type': 'Import',
+                'name': alias.name,
+                'path': self.file_path,
+                'parent_canonical_id': self.file_canonical_id,
+                'canonical_id': canonical_id,
+                'gid': gid,
+                'language': 'python',
+                'properties': {'asname': alias.asname} if alias.asname else {}
+            }
+            self.logger.debug(f"Extracted Import node: {json.dumps(node_obj)}")
+            self._log_and_append_node(node_obj)
+            rel_obj = {
+                'source_canonical_id': self.file_canonical_id,
+                'target_canonical_id': canonical_id,
+                'type': ':IMPORTS',
+                'properties': {}
+            }
+            self.logger.debug(f"Extracted IMPORTS relationship: {json.dumps(rel_obj)}")
+            self._log_and_append_relationship(rel_obj)
+
+    def visit_ImportFrom(self, node):
+        self.logger.debug(f"visit_ImportFrom called on file: {self.file_path}")
+        module = node.module if node.module else ''
+        for alias in node.names:
+            import_name = f"{module}.{alias.name}" if module else alias.name
+            canonical_id, gid = self.id_service_client.generate_id(
+                file_path=self.file_path,
+                entity_type='Import',
+                name=import_name,
+                parent_canonical_id=self.file_canonical_id
+            )
+            node_obj = {
+                'type': 'Import',
+                'name': import_name,
+                'path': self.file_path,
+                'parent_canonical_id': self.file_canonical_id,
+                'canonical_id': canonical_id,
+                'gid': gid,
+                'language': 'python',
+                'properties': {'module': module, 'asname': alias.asname} if alias.asname else {'module': module} if module else {}
+            }
+            self.logger.debug(f"Extracted ImportFrom node: {json.dumps(node_obj)}")
+            self._log_and_append_node(node_obj)
+            rel_obj = {
+                'source_canonical_id': self.file_canonical_id,
+                'target_canonical_id': canonical_id,
+                'type': ':IMPORTS',
+                'properties': {}
+            }
+            self.logger.debug(f"Extracted IMPORTS relationship: {json.dumps(rel_obj)}")
+            self._log_and_append_relationship(rel_obj)
+
+    def visit_Assign(self, node):
+        self.logger.debug(f"visit_Assign called on file: {self.file_path}")
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                canonical_id, gid = self.id_service_client.generate_id(
+                    file_path=self.file_path,
+                    entity_type='Variable',
+                    name=target.id,
+                    parent_canonical_id=self.file_canonical_id
+                )
+                node_obj = {
+                    'type': 'Variable',
+                    'name': target.id,
+                    'path': self.file_path,
+                    'parent_canonical_id': self.file_canonical_id,
+                    'canonical_id': canonical_id,
+                    'gid': gid,
+                    'language': 'python',
+                    'properties': {}
+                }
+                self.logger.debug(f"Extracted Variable node: {json.dumps(node_obj)}")
+                self._log_and_append_node(node_obj)
+                rel_obj = {
+                    'source_canonical_id': self.file_canonical_id,
+                    'target_canonical_id': canonical_id,
+                    'type': ':DECLARES',
+                    'properties': {}
+                }
+                self.logger.debug(f"Extracted DECLARES relationship: {json.dumps(rel_obj)}")
+                self._log_and_append_relationship(rel_obj)
+        self.generic_visit(node)
+
+    # Recommend similar enhancements for visit_FunctionDef, visit_ClassDef, visit_Call, and any other node/relationship creation.
+
+    # Existing visit_Module, visit_ClassDef, visit_FunctionDef, visit_Call remain unchanged but should be reviewed for completeness.
     
     def __init__(self, file_path: str, id_service_client: IdServiceClient):
         self.file_path = file_path
@@ -380,7 +502,8 @@ def analyze_python_file(file_path: str, id_service_client: IdServiceClient) -> T
         # Visit the AST
         visitor = PythonAstVisitor(file_path, id_service_client)
         visitor.visit(tree)
-        
+        logger.info(f"[NODE DEBUG] Extracted {len(visitor.nodes)} nodes from AST for {file_path}")
+        logger.info(f"[RELATIONSHIP DEBUG] Extracted {len(visitor.relationships)} relationships from AST for {file_path}")
         return visitor.nodes, visitor.relationships
     
     except Exception as e:
@@ -525,6 +648,7 @@ def process_message(ch, method, properties, body):
         ]
         logger.info(f"Inserting {len(nodes)} nodes into code_nodes...")
         batch_insert_nodes(nodes)
+        logger.info(f"[RELATIONSHIP DEBUG] Relationships after filtering: {len(filtered_relationships)}")
         logger.info(f"Inserting {len(filtered_relationships)} relationships into code_relationships...")
         batch_insert_relationships(filtered_relationships)
         logger.info("Insert complete.")

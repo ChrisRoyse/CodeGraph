@@ -8,8 +8,52 @@ This service consumes analysis results and ingests them into Neo4j.
 import os
 import json
 import logging
+
+# Ensure logging is set to DEBUG
+logging.basicConfig(level=logging.DEBUG)
 import time
 from typing import Dict, List, Any, Optional
+
+def sanitize_property(value):
+    """
+    Recursively sanitize a property for Neo4j compatibility:
+    - Remove properties with empty dicts/lists at any level
+    - Serialize any dict (including nested) as JSON
+    - For lists: if all elements are primitives, keep as is; if any element is a dict/list, serialize the whole list as JSON
+    - Only allow primitives or lists of primitives
+    - Omit any property that becomes None after sanitization
+    """
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        # Recursively sanitize dict values
+        sanitized_dict = {k: sanitize_property(v) for k, v in value.items()}
+        # Remove keys with None values
+        sanitized_dict = {k: v for k, v in sanitized_dict.items() if v is not None}
+        if not sanitized_dict:
+            return None
+        # Serialize sanitized dict as JSON
+        return json.dumps(sanitized_dict)
+    if isinstance(value, list):
+        # Remove empty lists
+        if not value:
+            return None
+        # Recursively sanitize list elements
+        sanitized_list = [sanitize_property(v) for v in value]
+        # Remove None elements
+        sanitized_list = [v for v in sanitized_list if v is not None]
+        if not sanitized_list:
+            return None
+        # If all elements are primitives, keep as is
+        if all(isinstance(i, (str, int, float, bool)) for i in sanitized_list):
+            return sanitized_list
+        # Otherwise, serialize the whole list as JSON
+        return json.dumps(sanitized_list)
+    # Only allow primitives
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    # Anything else is not allowed
+    return str(value)
 
 import pika
 from neo4j import GraphDatabase
@@ -84,7 +128,7 @@ class Neo4jIngestionWorker:
         - Unique constraint on gid property
         - Index on canonical_id property
         """
-        with self.driver.session() as session:
+        with self.driver.session(database=os.getenv('NEO4J_DATABASE', 'neo4j')) as session:
             try:
                 # Constraint creation removed - MERGE using gid handles uniqueness.
                 # Ensure ID service guarantees unique GIDs.
@@ -119,34 +163,71 @@ class Neo4jIngestionWorker:
             labels = tuple(node.get('labels', ['Node']))
             label_groups[labels].append(node)
 
-        with self.driver.session() as session:
+        with self.driver.session(database=os.getenv('NEO4J_DATABASE', 'neo4j')) as session:
             for labels, group in label_groups.items():
                 label_str = ':'.join(labels)
-                batch = []
+                batch_with_props = []
+                batch_no_props = []
                 canonical_ids = []
                 for node in group:
-                    node_data = {k: v for k, v in node.items() if k not in ['labels']}
-                    batch.append(node_data)
+                    # Sanitize node properties for Neo4j compatibility
+                    node_data = {k: v for k, v in node.items() if k not in ['labels', 'gid', 'canonical_id']}
+                    sanitized_props = {}
+                    for k, v in node_data.items():
+                        sanitized_v = sanitize_property(v)
+                        if sanitized_v is not None:
+                            sanitized_props[k] = sanitized_v
+                    if sanitized_props and len(sanitized_props) > 0:
+                        batch_with_props.append({
+                            'gid': node.get('gid'),
+                            'canonical_id': node.get('canonical_id'),
+                            'props': sanitized_props
+                        })
+                    else:
+                        batch_no_props.append({
+                            'gid': node.get('gid'),
+                            'canonical_id': node.get('canonical_id')
+                        })
                     canonical_ids.append(node.get('canonical_id', ''))
 
-                query = f"""
-                UNWIND $batch AS row
-                MERGE (n:{label_str} {{gid: row.gid}})
-                ON CREATE SET n += row
-                ON MATCH SET n += row
-                RETURN count(n) as count
-                """
+                logger.debug(f"[NODE INGEST] batch_with_props: {batch_with_props}")
+                logger.debug(f"[NODE INGEST] batch_no_props: {batch_no_props}")
+                print(f"[NODE INGEST] batch_with_props: {batch_with_props}")
+                print(f"[NODE INGEST] batch_no_props: {batch_no_props}")
 
-                try:
-                    result = session.run(query, batch=batch)
-                    count = result.single()["count"] if result.single() else 0
-                    logger.info(f"Ingested {count} nodes with labels: {labels}")
+                batch_all = batch_with_props + batch_no_props
+                count = 0
+                # Insert nodes with properties
+                if batch_with_props:
+                    query = f"""
+                    UNWIND $batch AS row
+                    MERGE (n:{label_str} {{gid: row.gid}})
+                    SET n += row.props
+                    RETURN count(n) as count
+                    """
+                    try:
+                        result = session.run(query, batch=batch_with_props)
+                        count += result.single()["count"] if result.single() else 0
+                    except Exception as e:
+                        logger.error(f"Error ingesting nodes with properties: {e}")
+                # Insert nodes with no properties
+                if batch_no_props:
+                    query = f"""
+                    UNWIND $batch AS row
+                    MERGE (n:{label_str} {{gid: row.gid}})
+                    RETURN count(n) as count
+                    """
+                    try:
+                        result = session.run(query, batch=batch_no_props)
+                        count += result.single()["count"] if result.single() else 0
+                    except Exception as e:
+                        logger.error(f"Error ingesting nodes with no properties: {e}")
+                logger.info(f"Ingested {count} nodes with labels: {labels}")
 
-                    # Immediate resolution attempt for pending relationships for all canonical_ids in this batch
-                    for cid in canonical_ids:
-                        self.resolve_pending_relationships_for_node(session, cid)
-                except Exception as e:
-                    logger.error(f"Error ingesting node batch with labels {labels}: {e}")
+                # Immediate resolution attempt for pending relationships for all canonical_ids in this batch
+                for cid in [n['canonical_id'] for n in batch_all]:
+                    self.resolve_pending_relationships_for_node(session, cid)
+
     
     def ingest_relationships(self, relationships: List[Dict[str, Any]]):
         """
@@ -165,37 +246,79 @@ class Neo4jIngestionWorker:
             rel_type = rel.get('type', 'RELATED_TO')
             type_groups[rel_type].append(rel)
 
-        with self.driver.session() as session:
+        with self.driver.session(database=os.getenv('NEO4J_DATABASE', 'neo4j')) as session:
             for rel_type, group in type_groups.items():
-                batch = []
+                batch_with_props = []
+                batch_no_props = []
                 for rel in group:
+                    # Sanitize relationship properties for Neo4j compatibility
                     rel_data = {k: v for k, v in rel.items() if k not in ['type']}
-                    batch.append(rel_data)
+                    sanitized_props = {}
+                    for k, v in rel_data.items():
+                        sanitized_v = sanitize_property(v)
+                        if sanitized_v is not None:
+                            sanitized_props[k] = sanitized_v
+                    if sanitized_props and len(sanitized_props) > 0:
+                        batch_with_props.append({
+                            'source_gid': rel.get('source_gid'),
+                            'target_canonical_id': rel.get('target_canonical_id'),
+                            'props': sanitized_props
+                        })
+                    else:
+                        batch_no_props.append({
+                            'source_gid': rel.get('source_gid'),
+                            'target_canonical_id': rel.get('target_canonical_id')
+                        })
 
-                # First, try to create all relationships in batch
-                query = f"""
-                UNWIND $batch AS row
-                MATCH (source {{gid: row.source_gid}})
-                MATCH (target {{canonical_id: row.target_canonical_id}})
-                MERGE (source)-[r:`{rel_type}`]->(target)
-                SET r += row
-                RETURN row.source_gid AS source_gid, row.target_canonical_id AS target_canonical_id
-                """
+                logger.debug(f"[REL INGEST] batch_with_props: {batch_with_props}")
+                logger.debug(f"[REL INGEST] batch_no_props: {batch_no_props}")
+                print(f"[REL INGEST] batch_with_props: {batch_with_props}")
+                print(f"[REL INGEST] batch_no_props: {batch_no_props}")
 
-                try:
-                    result = session.run(query, batch=batch)
-                    created_pairs = set((record["source_gid"], record["target_canonical_id"]) for record in result)
-                    logger.info(f"Created {len(created_pairs)} relationships of type {rel_type}")
+                batch_all = batch_with_props + batch_no_props
+                created_pairs = set()
+                # Insert relationships with properties
+                if batch_with_props:
+                    query = f"""
+                    UNWIND $batch AS row
+                    MATCH (source {{gid: row.source_gid}})
+                    MATCH (target {{canonical_id: row.target_canonical_id}})
+                    MERGE (source)-[r:`{rel_type}`]->(target)
+                    SET r += row.props
+                    RETURN row.source_gid AS source_gid, row.target_canonical_id AS target_canonical_id
+                    """
+                    try:
+                        result = session.run(query, batch=batch_with_props)
+                        created_pairs.update((record["source_gid"], record["target_canonical_id"]) for record in result)
+                        logger.info(f"Created {len(batch_with_props)} relationships of type {rel_type} (with properties)")
+                    except Exception as e:
+                        logger.error(f"Error creating relationships with properties: {e}")
+                # Insert relationships with no properties
+                if batch_no_props:
+                    query = f"""
+                    UNWIND $batch AS row
+                    MATCH (source {{gid: row.source_gid}})
+                    MATCH (target {{canonical_id: row.target_canonical_id}})
+                    MERGE (source)-[r:`{rel_type}`]->(target)
+                    RETURN row.source_gid AS source_gid, row.target_canonical_id AS target_canonical_id
+                    """
+                    try:
+                        result = session.run(query, batch=batch_no_props)
+                        created_pairs.update((record["source_gid"], record["target_canonical_id"]) for record in result)
+                        logger.info(f"Created {len(batch_no_props)} relationships of type {rel_type} (no properties)")
+                    except Exception as e:
+                        logger.error(f"Error creating relationships with no properties: {e}")
 
-                    # Find relationships that could not be created (missing node)
-                    pending_batch = []
-                    for rel in batch:
-                        key = (rel["source_gid"], rel["target_canonical_id"])
-                        if key not in created_pairs:
-                            pending_batch.append(rel)
+                # Find relationships that could not be created (missing node)
+                pending_batch = []
+                for rel in batch_all:
+                    key = (rel["source_gid"], rel["target_canonical_id"])
+                    if key not in created_pairs:
+                        pending_batch.append(rel)
 
-                    # Batch create PendingRelationship nodes for unresolved relationships
-                    if pending_batch:
+                # Batch create PendingRelationship nodes for unresolved relationships
+                if pending_batch:
+                    try:
                         pending_query = """
                         UNWIND $batch AS row
                         CREATE (pr:PendingRelationship {
@@ -208,9 +331,8 @@ class Neo4jIngestionWorker:
                         pending_result = session.run(pending_query, batch=pending_batch, rel_type=rel_type)
                         count = pending_result.single()["count"] if pending_result.single() else 0
                         logger.info(f"Created {count} pending relationships of type {rel_type}")
-
-                except Exception as e:
-                    logger.error(f"Error creating relationships of type {rel_type}: {e}")
+                    except Exception as e:
+                        logger.error(f"Error creating relationships of type {rel_type}: {e}")
     
     def resolve_pending_relationships_for_node(self, session, canonical_id: str):
         """
@@ -309,7 +431,7 @@ class Neo4jIngestionWorker:
         Processes relationships in batches of configurable size to avoid memory issues.
         """
         logger.info("Running periodic pending relationship resolution")
-        with self.driver.session() as session:
+        with self.driver.session(database=os.getenv('NEO4J_DATABASE', 'neo4j')) as session:
             try:
                 # Get all pending relationships in batches
                 batch_size = RELATIONSHIP_BATCH_SIZE
@@ -378,7 +500,7 @@ class Neo4jIngestionWorker:
         Args:
             node_gids: List of node GIDs to delete
         """
-        with self.driver.session() as session:
+        with self.driver.session(database=os.getenv('NEO4J_DATABASE', 'neo4j')) as session:
             for gid in node_gids:
                 try:
                     # First, find all nodes that should be deleted in a cascading manner
@@ -445,7 +567,7 @@ class Neo4jIngestionWorker:
         Args:
             relationship_identifiers: List of dictionaries with source_gid and target_canonical_id
         """
-        with self.driver.session() as session:
+        with self.driver.session(database=os.getenv('NEO4J_DATABASE', 'neo4j')) as session:
             for rel_id in relationship_identifiers:
                 try:
                     source_gid = rel_id.get('source_gid', '')

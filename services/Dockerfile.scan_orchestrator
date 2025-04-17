@@ -11,4 +11,4 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "scan_orchestrator.py"]
+CMD ["python", "services/scan_orchestrator.py"]
