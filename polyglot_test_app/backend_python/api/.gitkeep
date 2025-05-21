@@ -1,0 +1,11 @@
+create_file_with_block
+polyglot_test_app/backend_python/services/.gitkeep
+
+create_file_with_block
+polyglot_test_app/frontend_react_ts/src/components/.gitkeep
+
+create_file_with_block
+polyglot_test_app/frontend_react_ts/src/services/.gitkeep
+
+create_file_with_block
+polyglot_test_app/database_sql/.gitkeep
